@@ -1,0 +1,65 @@
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.stat-value {
+  font-size: 36px;
+  font-weight: bold;
+  color: #4CAF50;
+  margin-top: 10px;
+}
+
+.dashboard-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 20px;
+}
+
+.chart-card {
+  min-height: 400px;
+}
+
+.recent-expenses {
+  margin-top: 15px;
+}
+
+.expense-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  border-bottom: 1px solid #eee;
+  transition: background-color 0.2s ease;
+}
+
+.expense-item:hover {
+  background-color: #f9f9f9;
+}
+
+.expense-item:last-child {
+  border-bottom: none;
+}
+
+.expense-info {
+  flex: 1;
+}
+
+.expense-title {
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 5px;
+}
+
+.expense-category {
+  font-size: 14px;
+  color: #666;
+}
+
+.expense-amount {
+  font-weight: bold;
+  color: #4CAF50;
+  font-size: 18px;
+}

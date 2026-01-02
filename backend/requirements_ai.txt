@@ -1,0 +1,23 @@
+# AI & Computer Vision Dependencies (Windows-compatible)
+# Use pre-built wheels to avoid compilation errors
+
+# Core dependencies
+numpy>=1.21.0,<2.0.0
+Pillow>=9.0.0
+opencv-python>=4.5.0
+
+# OCR & Text Extraction
+paddleocr>=2.7.0.3
+pytesseract>=0.3.10
+
+# Machine Learning
+scikit-learn>=1.0.0
+scipy>=1.7.0
+
+# Optional: Deep Learning (requires significant disk space)
+# Uncomment only if needed for advanced features
+# torch>=1.9.0
+# transformers>=4.20.0
+
+# YAML handling (pre-built wheel to avoid C++ compilation)
+pyyaml>=5.4.1
