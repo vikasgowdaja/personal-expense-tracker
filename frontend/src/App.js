@@ -7,7 +7,15 @@ import Dashboard from './components/Dashboard/Dashboard';
 import ExpenseList from './components/Expenses/ExpenseList';
 import AddExpense from './components/Expenses/AddExpense';
 import UploadReceipt from './components/Expenses/UploadReceipt';
-import Navbar from './components/Layout/Navbar';
+import AppShell from './components/Layout/AppShell';
+import DailyLog from './components/DailyLog/DailyLog';
+import Finance from './components/Finance/Finance';
+import Insights from './components/Insights/Insights';
+import PlaceholderModule from './components/Common/PlaceholderModule';
+import CalendarHub from './components/Calendar/CalendarHub';
+import Profile from './components/Profile/Profile';
+import TrainerManager from './components/Vendor/TrainerManager';
+import TeachingHub from './components/Teaching/TeachingHub';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -38,7 +46,6 @@ function App() {
   return (
     <Router>
       <div className="App">
-        {isAuthenticated && <Navbar onLogout={handleLogout} />}
         <Routes>
           <Route 
             path="/login" 
@@ -48,26 +55,33 @@ function App() {
             path="/register" 
             element={!isAuthenticated ? <Register onLogin={handleLogin} /> : <Navigate to="/dashboard" />} 
           />
-          <Route 
-            path="/dashboard" 
-            element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/expenses" 
-            element={isAuthenticated ? <ExpenseList /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/add-expense" 
-            element={isAuthenticated ? <AddExpense /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/upload-receipt" 
-            element={isAuthenticated ? <UploadReceipt /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/" 
-            element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} />} 
-          />
+          <Route
+            path="/"
+            element={isAuthenticated ? <AppShell onLogout={handleLogout} /> : <Navigate to="/login" />}
+          >
+            <Route index element={<Navigate to="/dashboard" />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="daily-log" element={<DailyLog />} />
+            <Route path="calendar" element={<CalendarHub />} />
+            <Route path="finance" element={<Finance />} />
+            <Route path="expenses" element={<ExpenseList />} />
+            <Route path="insights" element={<Insights />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="add-expense" element={<AddExpense />} />
+            <Route path="upload-receipt" element={<UploadReceipt />} />
+            <Route
+              path="teaching"
+              element={<TeachingHub />}
+            />
+            <Route
+              path="vendor"
+              element={<TrainerManager />}
+            />
+            <Route
+              path="settings"
+              element={<PlaceholderModule title="Settings" description="Prepare role-based configuration and automation defaults." />}
+            />
+          </Route>
         </Routes>
       </div>
     </Router>
