@@ -1,24 +1,60 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { institutionAPI, trainerAPI } from '../../services/api';
+
+const CUSTOM_INSTITUTION = 'Other / Custom';
+
+const EMPTY_PROFILE_FORM = {
+  trainerName: '',
+  userName: '',
+  userEmail: '',
+  phone: '',
+  yearsOfExperience: '',
+  specialization: '',
+  institution: '',
+  customInstitution: ''
+};
 
 function TrainerManager() {
   const [trainers, setTrainers] = useState(() => JSON.parse(localStorage.getItem('trainer_profiles') || '[]'));
   const [selectedTrainerId, setSelectedTrainerId] = useState('');
-  const [profileForm, setProfileForm] = useState({
-    trainerName: '',
-    userName: '',
-    userEmail: '',
-    phone: '',
-    specialization: '',
-    college: ''
-  });
+  const [editTrainerId, setEditTrainerId] = useState('');
+  const [profileForm, setProfileForm] = useState(EMPTY_PROFILE_FORM);
+  const [uploadingResume, setUploadingResume] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [lastImportedProfile, setLastImportedProfile] = useState(null);
+  const [institutionOptions, setInstitutionOptions] = useState([]);
   const [attachForm, setAttachForm] = useState({
     type: 'custom',
     referenceId: '',
     notes: '',
-    amount: ''
+    amount: '',
+    paymentStatus: 'Invoiced'
   });
+  const [editRecordId, setEditRecordId] = useState('');
 
   const dailyLogs = useMemo(() => JSON.parse(localStorage.getItem('daily_logs') || '[]'), []);
+
+  useEffect(() => {
+    const loadInstitutions = async () => {
+      try {
+        const res = await institutionAPI.getAll();
+        const apiNames = (res.data || [])
+          .map((item) => (item.name || '').trim())
+          .filter(Boolean);
+        const existingTrainerInstitutions = JSON.parse(localStorage.getItem('trainer_profiles') || '[]')
+          .map((item) => (item.institution || item.college || '').trim())
+          .filter(Boolean);
+        setInstitutionOptions([...new Set([...apiNames, ...existingTrainerInstitutions])]);
+      } catch {
+        const existingTrainerInstitutions = JSON.parse(localStorage.getItem('trainer_profiles') || '[]')
+          .map((item) => (item.institution || item.college || '').trim())
+          .filter(Boolean);
+        setInstitutionOptions([...new Set(existingTrainerInstitutions)]);
+      }
+    };
+
+    loadInstitutions();
+  }, []);
 
   const persist = (next) => {
     localStorage.setItem('trainer_profiles', JSON.stringify(next));
@@ -32,31 +68,135 @@ function TrainerManager() {
       return;
     }
 
+    const resolvedInstitution = profileForm.institution === CUSTOM_INSTITUTION
+      ? profileForm.customInstitution.trim()
+      : profileForm.institution;
+
     const nextTrainer = {
-      id: Date.now().toString(),
+      id: editTrainerId || Date.now().toString(),
       trainerName: profileForm.trainerName,
       userProfile: {
         name: profileForm.userName,
         email: profileForm.userEmail,
         phone: profileForm.phone
       },
+      yearsOfExperience: Number(profileForm.yearsOfExperience || 0),
       specialization: profileForm.specialization,
-      college: profileForm.college,
-      records: [],
-      createdAt: new Date().toISOString()
+      institution: resolvedInstitution,
+      records: trainers.find((item) => item.id === editTrainerId)?.records || [],
+      createdAt: trainers.find((item) => item.id === editTrainerId)?.createdAt || new Date().toISOString()
     };
 
-    const next = [nextTrainer, ...trainers];
+    const next = editTrainerId
+      ? trainers.map((item) => (item.id === editTrainerId ? nextTrainer : item))
+      : [nextTrainer, ...trainers];
     persist(next);
     setSelectedTrainerId(nextTrainer.id);
+    setEditTrainerId('');
+    if (resolvedInstitution && !institutionOptions.includes(resolvedInstitution)) {
+      setInstitutionOptions((prev) => [resolvedInstitution, ...prev]);
+    }
+    setProfileForm(EMPTY_PROFILE_FORM);
+  };
+
+  const handleEditTrainer = (trainer) => {
+    const trainerInstitution = trainer.institution || trainer.college || '';
+    const useCustomInstitution = trainerInstitution && !institutionOptions.includes(trainerInstitution);
+    setEditTrainerId(trainer.id);
     setProfileForm({
-      trainerName: '',
-      userName: '',
-      userEmail: '',
-      phone: '',
-      specialization: '',
-      college: ''
+      trainerName: trainer.trainerName || '',
+      userName: trainer.userProfile?.name || '',
+      userEmail: trainer.userProfile?.email || '',
+      phone: trainer.userProfile?.phone || '',
+      yearsOfExperience: String(trainer.yearsOfExperience || ''),
+      specialization: trainer.specialization || '',
+      institution: useCustomInstitution ? CUSTOM_INSTITUTION : trainerInstitution,
+      customInstitution: useCustomInstitution ? trainerInstitution : ''
     });
+    setSelectedTrainerId(trainer.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteTrainer = (trainerId) => {
+    if (!window.confirm('Delete this trainer profile and all attached records?')) {
+      return;
+    }
+
+    const next = trainers.filter((item) => item.id !== trainerId);
+    persist(next);
+    if (selectedTrainerId === trainerId) {
+      setSelectedTrainerId('');
+    }
+    if (editTrainerId === trainerId) {
+      setEditTrainerId('');
+      setProfileForm(EMPTY_PROFILE_FORM);
+    }
+  };
+
+  const handleCancelTrainerEdit = () => {
+    setEditTrainerId('');
+    setProfileForm(EMPTY_PROFILE_FORM);
+  };
+
+  const handleResumeUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('resume', file);
+
+    try {
+      setUploadingResume(true);
+      setUploadError('');
+      const response = await trainerAPI.importFromPdf(formData);
+      const extracted = response.data.extracted || {};
+      const savedTrainer = response.data.trainer || {};
+
+      const mappedTrainer = {
+        id: savedTrainer._id || Date.now().toString(),
+        trainerName: savedTrainer.fullName || extracted.fullName || 'Trainer',
+        userProfile: {
+          name: savedTrainer.fullName || extracted.fullName || 'Trainer',
+          email: savedTrainer.email || extracted.email || '',
+          phone: savedTrainer.phone || extracted.phone || ''
+        },
+        yearsOfExperience: savedTrainer.yearsOfExperience || extracted.yearsOfExperience || 0,
+        specialization: savedTrainer.specialization || extracted.specialization || '',
+        institution: '',
+        records: trainers.find((item) => item.id === (savedTrainer._id || ''))?.records || [],
+        createdAt: savedTrainer.createdAt || new Date().toISOString()
+      };
+
+      const next = (() => {
+        const existingIndex = trainers.findIndex((item) => item.userProfile?.email && mappedTrainer.userProfile.email && item.userProfile.email.toLowerCase() === mappedTrainer.userProfile.email.toLowerCase());
+        if (existingIndex === -1) {
+          return [mappedTrainer, ...trainers];
+        }
+        return trainers.map((item, index) => (index === existingIndex ? { ...item, ...mappedTrainer, records: item.records || [] } : item));
+      })();
+
+      persist(next);
+      setSelectedTrainerId(mappedTrainer.id);
+      setLastImportedProfile(extracted);
+      setProfileForm((prev) => ({
+        ...prev,
+        trainerName: mappedTrainer.trainerName,
+        userName: mappedTrainer.trainerName,
+        userEmail: mappedTrainer.userProfile.email,
+        phone: mappedTrainer.userProfile.phone,
+        yearsOfExperience: String(mappedTrainer.yearsOfExperience || ''),
+        specialization: mappedTrainer.specialization,
+        institution: '',
+        customInstitution: ''
+      }));
+    } catch (err) {
+      setUploadError(err?.response?.data?.message || 'Unable to extract trainer profile from PDF');
+    } finally {
+      setUploadingResume(false);
+      event.target.value = '';
+    }
   };
 
   const handleAttachRecord = (event) => {
@@ -67,12 +207,15 @@ function TrainerManager() {
     }
 
     const attached = {
-      id: Date.now().toString(),
+      id: editRecordId || Date.now().toString(),
       type: attachForm.type,
       referenceId: attachForm.referenceId || 'manual',
       notes: attachForm.notes,
       amount: Number(attachForm.amount || 0),
-      date: new Date().toISOString()
+      paymentStatus: attachForm.paymentStatus || 'Invoiced',
+      date: trainers
+        .find((trainer) => trainer.id === selectedTrainerId)
+        ?.records?.find((record) => record.id === editRecordId)?.date || new Date().toISOString()
     };
 
     const next = trainers.map((trainer) => {
@@ -81,12 +224,53 @@ function TrainerManager() {
       }
       return {
         ...trainer,
-        records: [attached, ...(trainer.records || [])]
+        records: editRecordId
+          ? (trainer.records || []).map((record) => (record.id === editRecordId ? attached : record))
+          : [attached, ...(trainer.records || [])]
       };
     });
 
     persist(next);
-    setAttachForm({ type: 'custom', referenceId: '', notes: '', amount: '' });
+    setEditRecordId('');
+    setAttachForm({ type: 'custom', referenceId: '', notes: '', amount: '', paymentStatus: 'Invoiced' });
+  };
+
+  const handleEditRecord = (record) => {
+    setEditRecordId(record.id);
+    setAttachForm({
+      type: record.type || 'custom',
+      referenceId: record.referenceId || '',
+      notes: record.notes || '',
+      amount: String(record.amount || ''),
+      paymentStatus: record.paymentStatus || 'Invoiced'
+    });
+  };
+
+  const handleDeleteRecord = (recordId) => {
+    if (!selectedTrainerId || !window.confirm('Delete this attached record?')) {
+      return;
+    }
+
+    const next = trainers.map((trainer) => {
+      if (trainer.id !== selectedTrainerId) {
+        return trainer;
+      }
+      return {
+        ...trainer,
+        records: (trainer.records || []).filter((record) => record.id !== recordId)
+      };
+    });
+
+    persist(next);
+    if (editRecordId === recordId) {
+      setEditRecordId('');
+      setAttachForm({ type: 'custom', referenceId: '', notes: '', amount: '', paymentStatus: 'Invoiced' });
+    }
+  };
+
+  const handleCancelRecordEdit = () => {
+    setEditRecordId('');
+    setAttachForm({ type: 'custom', referenceId: '', notes: '', amount: '', paymentStatus: 'Invoiced' });
   };
 
   const selectedTrainer = trainers.find((item) => item.id === selectedTrainerId);
@@ -94,13 +278,40 @@ function TrainerManager() {
   return (
     <section className="ops-page">
       <div className="ops-page-header">
-        <h1>Trainer Profiles</h1>
-        <p>Create trainer-user profiles, attach records, and track all linked activity in one section.</p>
+        <h1>Trainer / Instructor Profiles</h1>
+        <p>Create trainer-user profiles, map institutions and clients, and track linked activity.</p>
       </div>
 
       <div className="ops-grid-two">
         <article className="ops-card">
-          <h3>Create Trainer + User Profile</h3>
+          <h3>{editTrainerId ? 'Edit Trainer + User Profile' : 'Create Trainer + User Profile'}</h3>
+          <div className="form-group" style={{ marginBottom: '1rem' }}>
+            <label>Upload Trainer PDF Resume</label>
+            <input
+              className="form-control"
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={handleResumeUpload}
+              disabled={uploadingResume}
+            />
+            <span style={{ fontSize: '0.78rem', color: 'var(--ops-text-secondary)', display: 'block', marginTop: '4px' }}>
+              Upload a trainer resume PDF to auto-extract name, email, phone, expertise topics, and years of experience.
+            </span>
+            {uploadingResume && <span style={{ fontSize: '0.78rem', color: 'var(--ops-text-secondary)', display: 'block', marginTop: '4px' }}>Extracting trainer details...</span>}
+            {uploadError && <span className="warning" style={{ display: 'block', marginTop: '4px' }}>{uploadError}</span>}
+            {lastImportedProfile && (
+              <div className="daily-feed-item" style={{ marginTop: '0.75rem' }}>
+                <strong>Extracted Profile</strong>
+                <p>
+                  {lastImportedProfile.fullName || 'N/A'}
+                  {lastImportedProfile.email ? ` | ${lastImportedProfile.email}` : ''}
+                  {lastImportedProfile.phone ? ` | ${lastImportedProfile.phone}` : ''}
+                  {lastImportedProfile.yearsOfExperience ? ` | ${lastImportedProfile.yearsOfExperience} yrs` : ''}
+                </p>
+                {lastImportedProfile.topics?.length > 0 && <p>Topics: {lastImportedProfile.topics.join(', ')}</p>}
+              </div>
+            )}
+          </div>
           <form className="structured-grid" onSubmit={handleCreateProfile}>
             <label>
               Trainer Name
@@ -136,6 +347,16 @@ function TrainerManager() {
               />
             </label>
             <label>
+              Years of Experience
+              <input
+                className="form-control"
+                type="number"
+                min="0"
+                value={profileForm.yearsOfExperience}
+                onChange={(e) => setProfileForm((prev) => ({ ...prev, yearsOfExperience: e.target.value }))}
+              />
+            </label>
+            <label>
               Specialization
               <input
                 className="form-control"
@@ -144,23 +365,46 @@ function TrainerManager() {
               />
             </label>
             <label>
-              College
-              <input
+              Institution
+              <select
                 className="form-control"
-                value={profileForm.college}
-                onChange={(e) => setProfileForm((prev) => ({ ...prev, college: e.target.value }))}
-              />
+                value={profileForm.institution}
+                onChange={(e) => setProfileForm((prev) => ({
+                  ...prev,
+                  institution: e.target.value,
+                  customInstitution: e.target.value === CUSTOM_INSTITUTION ? prev.customInstitution : ''
+                }))}
+              >
+                <option value="">-- Select Institution --</option>
+                {institutionOptions.map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+                <option value={CUSTOM_INSTITUTION}>{CUSTOM_INSTITUTION}</option>
+              </select>
             </label>
+            {profileForm.institution === CUSTOM_INSTITUTION && (
+              <label>
+                Custom Institution
+                <input
+                  className="form-control"
+                  value={profileForm.customInstitution}
+                  onChange={(e) => setProfileForm((prev) => ({ ...prev, customInstitution: e.target.value }))}
+                />
+              </label>
+            )}
             <div className="inline-actions">
-              <button type="submit" className="btn btn-primary">Create Profile</button>
+              <button type="submit" className="btn btn-primary">{editTrainerId ? 'Update Profile' : 'Create Profile'}</button>
+              {editTrainerId && (
+                <button type="button" className="btn btn-secondary" onClick={handleCancelTrainerEdit}>Cancel</button>
+              )}
             </div>
           </form>
         </article>
 
         <article className="ops-card">
-          <h3>Attach Records to Trainer</h3>
+          <h3>{editRecordId ? 'Edit Engagement / Finance Record' : 'Attach Engagement / Finance Records'}</h3>
           <label>
-            Select Trainer
+            Select Trainer / Instructor
             <select
               className="form-control"
               value={selectedTrainerId}
@@ -194,7 +438,7 @@ function TrainerManager() {
                 className="form-control"
                 value={attachForm.referenceId}
                 onChange={(e) => setAttachForm((prev) => ({ ...prev, referenceId: e.target.value }))}
-                placeholder={attachForm.type === 'daily-log' ? `e.g. ${dailyLogs[0]?.id || 'daily-log-id'}` : 'finance-id or custom-id'}
+                placeholder={attachForm.type === 'daily-log' ? `e.g. ${dailyLogs[0]?.id || 'daily-log-id'}` : 'invoice-id, finance-id or custom-id'}
               />
             </label>
 
@@ -218,30 +462,51 @@ function TrainerManager() {
               />
             </label>
 
+            <label>
+              Payment Status
+              <select
+                className="form-control"
+                value={attachForm.paymentStatus}
+                onChange={(e) => setAttachForm((prev) => ({ ...prev, paymentStatus: e.target.value }))}
+              >
+                <option value="Planned">Planned</option>
+                <option value="Ongoing">Ongoing</option>
+                <option value="Completed">Completed</option>
+                <option value="Invoiced">Invoiced</option>
+                <option value="Paid">Paid</option>
+              </select>
+            </label>
+
             <div className="inline-actions">
-              <button type="submit" className="btn btn-primary">Attach Record</button>
+              <button type="submit" className="btn btn-primary">{editRecordId ? 'Update Record' : 'Attach Record'}</button>
+              {editRecordId && (
+                <button type="button" className="btn btn-secondary" onClick={handleCancelRecordEdit}>Cancel</button>
+              )}
             </div>
           </form>
         </article>
       </div>
 
       <article className="ops-card">
-        <h3>Trainer Record Tracker</h3>
+        <h3>Trainer Engagement Tracker</h3>
         <div className="table-wrap">
           <table className="ops-table">
             <thead>
               <tr>
-                <th>Trainer</th>
+                <th>Trainer / Instructor</th>
                 <th>User Email</th>
+                <th>Experience</th>
                 <th>Specialization</th>
+                <th>Institution</th>
                 <th>Records</th>
                 <th>Total Attached</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {trainers.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="muted">No trainer profiles yet.</td>
+                  <td colSpan="8" className="muted">No trainer profiles yet.</td>
                 </tr>
               )}
               {trainers.map((trainer) => {
@@ -250,9 +515,27 @@ function TrainerManager() {
                   <tr key={trainer.id}>
                     <td>{trainer.trainerName}</td>
                     <td>{trainer.userProfile.email}</td>
+                    <td>{trainer.yearsOfExperience ? `${trainer.yearsOfExperience} yrs` : 'N/A'}</td>
                     <td>{trainer.specialization || 'N/A'}</td>
+                    <td>{trainer.institution || trainer.college || 'N/A'}</td>
                     <td>{trainer.records?.length || 0}</td>
                     <td>₹{totalAmount.toLocaleString('en-IN')}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: '0.78rem', marginRight: '6px' }}
+                        onClick={() => handleEditTrainer(trainer)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-danger"
+                        style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+                        onClick={() => handleDeleteTrainer(trainer.id)}
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -272,7 +555,26 @@ function TrainerManager() {
                 Ref: {record.referenceId} | Amount: ₹{Number(record.amount || 0).toLocaleString('en-IN')}
                 {record.duration ? ` | ${record.duration}h` : ''}
                 {record.notes ? ` | ${record.notes}` : ''}
+                {record.paymentStatus ? ` | Status: ${record.paymentStatus}` : ''}
               </p>
+              <div className="inline-actions" style={{ marginTop: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+                  onClick={() => handleEditRecord(record)}
+                >
+                  Edit Record
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+                  onClick={() => handleDeleteRecord(record.id)}
+                >
+                  Delete Record
+                </button>
+              </div>
             </div>
           ))}
         </article>

@@ -3,11 +3,13 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: 'home' },
-  { to: '/daily-log', label: 'Daily Log', icon: 'log' },
   { to: '/calendar', label: 'Calendar', icon: 'calendar' },
-  { to: '/finance', label: 'Finance', icon: 'finance' },
-  { to: '/teaching', label: 'Teaching', icon: 'teaching' },
-  { to: '/vendor', label: 'Vendor', icon: 'vendor' },
+  { to: '/finance', label: 'Payments', icon: 'payments' },
+  { to: '/training-engagements', label: 'Training Engagements', icon: 'teaching' },
+  { to: '/trainers', label: 'Trainers', icon: 'trainer' },
+  { to: '/topics', label: 'Topics', icon: 'topic' },
+  { to: '/colleges', label: 'Colleges', icon: 'college' },
+  { to: '/organizations', label: 'Organizations', icon: 'organization' },
   { to: '/insights', label: 'Insights', icon: 'insights' },
   { to: '/profile', label: 'Profile', icon: 'profile' },
   { to: '/settings', label: 'Settings', icon: 'settings' }
@@ -29,10 +31,12 @@ function Icon({ name }) {
       </svg>
     );
   }
-  if (name === 'finance') {
+  if (name === 'payments') {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm.9 4v1.5c1.5.2 2.6 1.2 2.7 2.6h-2.1c-.1-.5-.5-.8-1.1-.8-.6 0-1 .3-1 .8 0 .6.6.8 1.7 1.1 1.7.4 2.8 1.1 2.8 2.8 0 1.4-1.1 2.5-2.9 2.7V18h-1.8v-1.5c-1.8-.2-2.9-1.3-3-2.8h2.1c.1.6.6 1 1.3 1 .7 0 1.2-.3 1.2-.9 0-.6-.5-.8-1.7-1.1-1.6-.4-2.8-1-2.8-2.8 0-1.4 1.1-2.4 2.8-2.7V6h1.8Z" />
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <path d="M2 10h20" />
+        <path d="M6 15h4M14 15h4" />
       </svg>
     );
   }
@@ -51,10 +55,42 @@ function Icon({ name }) {
       </svg>
     );
   }
+  if (name === 'trainer') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="9" cy="7" r="4" />
+        <path d="M2 21v-2a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v2" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      </svg>
+    );
+  }
+  if (name === 'topic') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 4h16v4H4V4Zm0 6h16v4H4v-4Zm0 6h10v4H4v-4Z" />
+      </svg>
+    );
+  }
+  if (name === 'college') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3 2 8l10 5 10-5-10-5Z" />
+        <path d="M5 11.5V16c0 2.2 3.1 4 7 4s7-1.8 7-4v-4.5l-7 3.5-7-3.5Z" />
+      </svg>
+    );
+  }
   if (name === 'vendor') {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M3 7h18l-1.2 13H4.2L3 7Zm3.2-3h11.6l1.2 2H5l1.2-2Z" />
+      </svg>
+    );
+  }
+  if (name === 'organization') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 21h18v-2H3v2Zm2-4h4V7H5v10Zm5 0h4V3h-4v14Zm5 0h4V10h-4v7Z" />
       </svg>
     );
   }
@@ -117,12 +153,12 @@ function AppShell({ onLogout }) {
       <div className="ops-main">
         <header className="ops-topbar">
           <div>
-            <h2>Decision Support Workspace</h2>
-            <p>Track schedule, teaching, vendor ops and cash flow in one loop.</p>
+            <h2>Training Engagement Management System (TEMS)</h2>
+            <p>Track training engagements, client operations, and cash flow in one loop.</p>
           </div>
           <div className="ops-topbar-actions">
-            <button className="btn btn-secondary" onClick={() => navigate('/daily-log')}>
-              Voice Input
+            <button className="btn btn-secondary" onClick={() => navigate('/training-engagements')}>
+              New Engagement
             </button>
             <button className="btn btn-primary" onClick={() => navigate('/add-expense')}>
               Quick Add

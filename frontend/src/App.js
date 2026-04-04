@@ -8,14 +8,16 @@ import ExpenseList from './components/Expenses/ExpenseList';
 import AddExpense from './components/Expenses/AddExpense';
 import UploadReceipt from './components/Expenses/UploadReceipt';
 import AppShell from './components/Layout/AppShell';
-import DailyLog from './components/DailyLog/DailyLog';
-import Finance from './components/Finance/Finance';
+import Payments from './components/Payments/Payments';
 import Insights from './components/Insights/Insights';
 import PlaceholderModule from './components/Common/PlaceholderModule';
 import CalendarHub from './components/Calendar/CalendarHub';
 import Profile from './components/Profile/Profile';
-import TrainerManager from './components/Vendor/TrainerManager';
-import TeachingHub from './components/Teaching/TeachingHub';
+import TrainingEngagementsHub from './components/TrainingEngagements/TrainingEngagementsHub';
+import Colleges from './components/Colleges/Colleges';
+import Organizations from './components/Organizations/Organizations';
+import Trainers from './components/Trainers/Trainers';
+import Topics from './components/Topics/Topics';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -61,9 +63,8 @@ function App() {
           >
             <Route index element={<Navigate to="/dashboard" />} />
             <Route path="dashboard" element={<Dashboard />} />
-            <Route path="daily-log" element={<DailyLog />} />
             <Route path="calendar" element={<CalendarHub />} />
-            <Route path="finance" element={<Finance />} />
+            <Route path="finance" element={<Payments />} />
             <Route path="expenses" element={<ExpenseList />} />
             <Route path="insights" element={<Insights />} />
             <Route path="profile" element={<Profile />} />
@@ -71,11 +72,31 @@ function App() {
             <Route path="upload-receipt" element={<UploadReceipt />} />
             <Route
               path="teaching"
-              element={<TeachingHub />}
+              element={<Navigate to="/training-engagements" replace />}
+            />
+            <Route
+              path="training-engagements"
+              element={<TrainingEngagementsHub />}
             />
             <Route
               path="vendor"
-              element={<TrainerManager />}
+              element={<Navigate to="/training-engagements" replace />}
+            />
+            <Route
+              path="trainers"
+              element={<Trainers />}
+            />
+            <Route
+              path="colleges"
+              element={<Colleges />}
+            />
+            <Route
+              path="topics"
+              element={<Topics />}
+            />
+            <Route
+              path="organizations"
+              element={<Organizations />}
             />
             <Route
               path="settings"

@@ -1,192 +1,303 @@
-import React, { useState, useEffect } from 'react';
-import { expenseAPI } from '../../services/api';
-import { Area, AreaChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import React, { useMemo, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import './Dashboard.css';
 
-const SPLIT_COLORS = {
-  fullTime: '#3b82f6',
-  hustle: '#16a34a',
-  both: '#7c3aed'
-};
+const DEFAULT_TDS_PERCENT = 10;
 
-function Dashboard() {
-  const [stats, setStats] = useState(null);
-  const [recentExpenses, setRecentExpenses] = useState([]);
-  const [loading, setLoading] = useState(true);
+function inr(value) {
+  return `₹${Number(value || 0).toLocaleString('en-IN')}`;
+}
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      const [statsRes, expensesRes] = await Promise.all([
-        expenseAPI.getStats(),
-        expenseAPI.getAll()
-      ]);
-      setStats(statsRes.data);
-      setRecentExpenses(expensesRes.data.slice(0, 5));
-      setLoading(false);
-    } catch (err) {
-      console.error('Error loading dashboard data:', err);
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
-    return <div className="loading">Loading dashboard...</div>;
+function monthKey(dateLike) {
+  const d = new Date(dateLike);
+  if (Number.isNaN(d.getTime())) {
+    return null;
   }
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
 
-  const logs = JSON.parse(localStorage.getItem('daily_logs') || '[]');
-
-  const dayTypeBreakdown = logs.reduce(
-    (acc, entry) => {
-      if (entry.dayType === 'full-time') acc.fullTime += 1;
-      if (entry.dayType === 'hustle') acc.hustle += 1;
-      if (entry.dayType === 'both') acc.both += 1;
-      return acc;
-    },
-    { fullTime: 0, hustle: 0, both: 0 }
+function parseAmount(row) {
+  const gross = Number(
+    row.grossAmount !== undefined
+      ? row.grossAmount
+      : row.ratePerDay !== undefined && row.totalDays !== undefined
+        ? Number(row.ratePerDay || 0) * Number(row.totalDays || 0)
+        : row.totalAmount || 0
   );
 
-  const splitData = [
-    { name: 'Full-time', value: dayTypeBreakdown.fullTime, color: SPLIT_COLORS.fullTime },
-    { name: 'Hustle', value: dayTypeBreakdown.hustle, color: SPLIT_COLORS.hustle },
-    { name: 'Both', value: dayTypeBreakdown.both, color: SPLIT_COLORS.both }
-  ];
+  const tds = row.tdsApplicable === false
+    ? 0
+    : Number(
+        row.tdsAmount !== undefined
+          ? row.tdsAmount
+          : (gross * DEFAULT_TDS_PERCENT) / 100
+      );
 
-  const weeklyTrend = Array.from({ length: 7 }).map((_, index) => {
-    const expense = recentExpenses[index]?.amount || 0;
-    const productivity = logs[index]?.dayType === 'both' ? 90 : logs[index]?.dayType === 'hustle' ? 70 : 50;
+  const net = Number(
+    row.totalAmount !== undefined
+      ? row.totalAmount
+      : gross - tds
+  );
+
+  return { gross, tds, net };
+}
+
+function Dashboard() {
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  const engagements = useMemo(
+    () => JSON.parse(localStorage.getItem('training_engagements') || '[]'),
+    []
+  );
+
+  const trainers = useMemo(
+    () => JSON.parse(localStorage.getItem('trainer_profiles') || '[]'),
+    []
+  );
+
+  const settlements = useMemo(
+    () => JSON.parse(localStorage.getItem('trainer_settlements') || '[]'),
+    []
+  );
+
+  const analytics = useMemo(() => {
+    const totals = engagements.reduce(
+      (acc, row) => {
+        const { gross, tds, net } = parseAmount(row);
+        acc.gross += gross;
+        acc.tds += tds;
+        acc.net += net;
+        return acc;
+      },
+      { gross: 0, tds: 0, net: 0 }
+    );
+
+    const settledPaidByEngagement = settlements
+      .filter((item) => item.status === 'Paid' && item.trainingRecordId)
+      .reduce((acc, item) => {
+        acc[item.trainingRecordId] = (acc[item.trainingRecordId] || 0) + Number(item.amount || 0);
+        return acc;
+      }, {});
+
+    const overallSettlementPaid = settlements
+      .filter((item) => item.status === 'Paid')
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+    const overallMarginAmount = totals.net - overallSettlementPaid;
+    const overallMarginPercent = totals.net > 0 ? (overallMarginAmount / totals.net) * 100 : 0;
+
+    const monthMap = {};
+    const yearMap = {};
+
+    engagements.forEach((row) => {
+      const dateRef = row.startDate || row.createdAt;
+      const key = monthKey(dateRef);
+      if (!key) return;
+
+      const y = Number(key.slice(0, 4));
+      const m = key.slice(5, 7);
+      const { gross, tds, net } = parseAmount(row);
+
+      if (!monthMap[key]) {
+        monthMap[key] = { key, year: y, month: m, gross: 0, tds: 0, net: 0, count: 0 };
+      }
+      monthMap[key].gross += gross;
+      monthMap[key].tds += tds;
+      monthMap[key].net += net;
+      monthMap[key].count += 1;
+
+      if (!yearMap[y]) {
+        yearMap[y] = { year: y, gross: 0, tds: 0, net: 0, count: 0 };
+      }
+      yearMap[y].gross += gross;
+      yearMap[y].tds += tds;
+      yearMap[y].net += net;
+      yearMap[y].count += 1;
+    });
+
+    const monthRows = Object.values(monthMap).sort((a, b) => a.key.localeCompare(b.key));
+    const yearlyRows = Object.values(yearMap).sort((a, b) => a.year - b.year);
+
+    const availableYears = [...new Set(monthRows.map((m) => m.year))].sort((a, b) => a - b);
+    const monthlyForSelectedYear = monthRows
+      .filter((m) => m.year === selectedYear)
+      .map((m) => ({
+        ...m,
+        label: new Date(`${m.key}-01`).toLocaleString('en-IN', { month: 'short' })
+      }));
+
+    const engagementMargins = engagements.map((row) => {
+      const { net } = parseAmount(row);
+      const settlementPaid = Number(settledPaidByEngagement[row.id] || 0);
+      const marginAmount = net - settlementPaid;
+      const marginPercent = net > 0 ? (marginAmount / net) * 100 : 0;
+
+      return {
+        id: row.id,
+        label: `${row.college || 'Unknown College'} - ${row.topic || row.notes || 'Training Engagement'}`,
+        netRevenue: net,
+        settlementPaid,
+        marginAmount,
+        marginPercent
+      };
+    });
+
     return {
-      day: `D${index + 1}`,
-      expense,
-      productivity
+      totals,
+      overallSettlementPaid,
+      overallMarginAmount,
+      overallMarginPercent,
+      engagementMargins,
+      monthlyForSelectedYear,
+      yearlyRows,
+      availableYears
     };
-  });
-
-  const pendingPayments = logs
-    .filter((item) => item.finance?.status === 'pending')
-    .reduce((sum, item) => sum + Number(item.finance?.amount || 0), 0);
-
-  const totalReceived = logs
-    .filter((item) => item.finance?.status === 'received')
-    .reduce((sum, item) => sum + Number(item.finance?.amount || 0), 0);
-
-  const todayBadge = dayTypeBreakdown.both > 0 ? 'BOTH' : dayTypeBreakdown.hustle > dayTypeBreakdown.fullTime ? 'HUSTLE' : 'FULL-TIME';
+  }, [engagements, selectedYear, settlements]);
 
   return (
     <section className="ops-page">
       <div className="ops-page-header">
-        <h1>Smart Dashboard</h1>
-        <p>Single-glance status with trend context and suggested focus.</p>
+        <h1>TEMS Revenue Dashboard</h1>
+        <p>Overall TDS, overall revenue, in-hand revenue, counts, and month/year analysis.</p>
       </div>
 
-      <div className="summary-cards">
-        <div className="ops-card stat-card">
-          <p>Day Classification</p>
-          <h3>{todayBadge}</h3>
-          <span className={`status-pill ${todayBadge === 'FULL-TIME' ? 'full-time' : todayBadge === 'HUSTLE' ? 'hustle' : 'both'}`}>
-            Today signal
-          </span>
+      <div className="summary-cards dashboard-summary-grid">
+        <div className="ops-card summary-card teaching-stat-card accent-green">
+          <div className="stat-value">{inr(analytics.totals.gross)}</div>
+          <div className="stat-label">Overall Revenue (Gross)</div>
         </div>
-
-        <div className="ops-card stat-card received">
-          <p>Earnings Snapshot</p>
-          <h3>${totalReceived.toFixed(2)}</h3>
-          <span className="muted">Captured from structured daily logs</span>
+        <div className="ops-card summary-card teaching-stat-card accent-blue">
+          <div className="stat-value">{inr(analytics.totals.tds)}</div>
+          <div className="stat-label">Overall TDS</div>
         </div>
-
-        <div className="ops-card stat-card pending">
-          <p>Pending Payments</p>
-          <h3>${pendingPayments.toFixed(2)}</h3>
-          <span className="muted">Red indicates follow-up needed</span>
+        <div className="ops-card summary-card teaching-stat-card accent-purple">
+          <div className="stat-value">{inr(analytics.totals.net)}</div>
+          <div className="stat-label">In-hand Revenue</div>
+        </div>
+        <div className="ops-card summary-card teaching-stat-card accent-blue">
+          <div className="stat-value">{inr(analytics.overallSettlementPaid)}</div>
+          <div className="stat-label">Trainer Settlement (Paid)</div>
+        </div>
+        <div className="ops-card summary-card teaching-stat-card accent-green">
+          <div className="stat-value">{inr(analytics.overallMarginAmount)}</div>
+          <div className="stat-label">Company Margin</div>
+        </div>
+        <div className="ops-card summary-card teaching-stat-card">
+          <div className="stat-value">{analytics.overallMarginPercent.toFixed(2)}%</div>
+          <div className="stat-label">Margin %</div>
+        </div>
+        <div className="ops-card summary-card teaching-stat-card">
+          <div className="stat-value">{engagements.length}</div>
+          <div className="stat-label">No. of Engagements</div>
+        </div>
+        <div className="ops-card summary-card teaching-stat-card">
+          <div className="stat-value">{trainers.length}</div>
+          <div className="stat-label">No. of Trainers</div>
         </div>
       </div>
 
       <div className="ops-grid-two">
         <article className="ops-card chart-card">
-          <h3>Productivity Split</h3>
-          {splitData.some((item) => item.value > 0) ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={splitData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={86}
-                  dataKey="value"
-                >
-                  {splitData.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="muted">No daily logs yet. Add your first voice log to see split analytics.</p>
-          )}
-        </article>
-
-        <article className="ops-card chart-card">
-          <h3>Today vs Weekly Trend</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={weeklyTrend}>
-              <defs>
-                <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4} />
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <Tooltip />
-              <Area type="monotone" dataKey="expense" stroke="#ef4444" fillOpacity={1} fill="url(#colorExpense)" />
-              <Area type="monotone" dataKey="productivity" stroke="#3b82f6" fillOpacity={0} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </article>
-      </div>
-
-      <div className="ops-grid-two">
-        <article className="ops-card">
-          <h3>Activity Timeline</h3>
-          {recentExpenses.length > 0 ? (
-            <div className="timeline">
-              {recentExpenses.map((expense) => (
-                <div key={expense._id} className="timeline-item">
-                  <span className="timeline-dot" />
-                  <div>
-                    <strong>{expense.title}</strong>
-                    <p className="muted">{expense.category}</p>
-                  </div>
-                  <div className="expense-amount">${expense.amount.toFixed(2)}</div>
-                </div>
+          <div className="dashboard-card-header">
+            <h3>Per-Month Analysis</h3>
+            <select
+              className="form-control"
+              style={{ width: '140px' }}
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+            >
+              {analytics.availableYears.length === 0 && (
+                <option value={selectedYear}>{selectedYear}</option>
+              )}
+              {analytics.availableYears.map((year) => (
+                <option key={year} value={year}>{year}</option>
               ))}
-            </div>
+            </select>
+          </div>
+
+          {analytics.monthlyForSelectedYear.length === 0 ? (
+            <p className="muted">No monthly data for the selected year.</p>
           ) : (
-            <p className="muted">No activity entries yet.</p>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={analytics.monthlyForSelectedYear}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="label" />
+                <YAxis />
+                <Tooltip formatter={(value) => inr(value)} />
+                <Bar dataKey="gross" name="Gross" fill="#16a34a" />
+                <Bar dataKey="tds" name="TDS" fill="#f59e0b" />
+                <Bar dataKey="net" name="In-hand" fill="#2563eb" />
+              </BarChart>
+            </ResponsiveContainer>
           )}
         </article>
 
         <article className="ops-card">
-          <h3>AI Insight Snapshot</h3>
-          <div className="insight-stack">
-            <p className="insight-inline">
-              {todayBadge === 'BOTH'
-                ? 'Balanced day profile detected. Protect deep-work blocks to avoid context switching overhead.'
-                : 'Single-mode day profile detected. Consider adding one focused hustle block to diversify earnings.'}
-            </p>
-            <p className="insight-inline">
-              {pendingPayments > 0
-                ? `Pending payments at $${pendingPayments.toFixed(2)}. Trigger follow-up reminders today.`
-                : 'No pending payouts. Cash flow is clean for the current snapshot.'}
-            </p>
-            <p className="insight-inline">Total tracked expenses: ${stats?.total?.toFixed(2) || '0.00'} across {stats?.count || 0} entries.</p>
-          </div>
+          <h3>Per-Year Analysis</h3>
+          {analytics.yearlyRows.length === 0 ? (
+            <p className="muted">No yearly data available yet.</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="ops-table">
+                <thead>
+                  <tr>
+                    <th>Year</th>
+                    <th>Engagements</th>
+                    <th>Gross Revenue</th>
+                    <th>TDS</th>
+                    <th>In-hand Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analytics.yearlyRows.map((row) => (
+                    <tr key={row.year}>
+                      <td>{row.year}</td>
+                      <td>{row.count}</td>
+                      <td>{inr(row.gross)}</td>
+                      <td>{inr(row.tds)}</td>
+                      <td><strong>{inr(row.net)}</strong></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </article>
       </div>
+
+      <article className="ops-card" style={{ marginTop: '1.2rem' }}>
+        <h3>Engagement Margin Analysis</h3>
+        {analytics.engagementMargins.length === 0 ? (
+          <p className="muted">No engagement margin data available.</p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="ops-table">
+              <thead>
+                <tr>
+                  <th>Engagement</th>
+                  <th>In-hand Revenue</th>
+                  <th>Trainer Settlement (Paid)</th>
+                  <th>Margin Amount</th>
+                  <th>Margin %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics.engagementMargins.map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.label}</td>
+                    <td>{inr(row.netRevenue)}</td>
+                    <td>{inr(row.settlementPaid)}</td>
+                    <td><strong>{inr(row.marginAmount)}</strong></td>
+                    <td>{row.marginPercent.toFixed(2)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </article>
     </section>
   );
 }

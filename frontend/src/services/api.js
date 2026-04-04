@@ -52,4 +52,60 @@ export const processedDataAPI = {
   getAll: () => api.get('/ocr/processed')
 };
 
+// TEMS APIs
+export const trainerAPI = {
+  getAll: () => api.get('/trainers'),
+  create: (data) => api.post('/trainers', data),
+  update: (id, data) => api.put(`/trainers/${id}`, data),
+  delete: (id) => api.delete(`/trainers/${id}`),
+  importFromPdf: (formData) => api.post('/trainers/import-pdf', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+};
+
+export const institutionAPI = {
+  getAll: () => api.get('/institutions'),
+  create: (data) => api.post('/institutions', data),
+  update: (id, data) => api.put(`/institutions/${id}`, data),
+  delete: (id) => api.delete(`/institutions/${id}`)
+};
+
+export const clientAPI = {
+  getAll: () => api.get('/clients'),
+  create: (data) => api.post('/clients', data),
+  update: (id, data) => api.put(`/clients/${id}`, data),
+  delete: (id) => api.delete(`/clients/${id}`)
+};
+
+export const topicAPI = {
+  getAll: () => api.get('/topics'),
+  create: (data) => api.post('/topics', data),
+  seedDefaults: () => api.post('/topics/seed-defaults'),
+  update: (id, data) => api.put(`/topics/${id}`, data),
+  delete: (id) => api.delete(`/topics/${id}`)
+};
+
+export const trainingEngagementAPI = {
+  getAll: (status) => api.get('/training-engagements', { params: status ? { status } : {} }),
+  getById: (id) => api.get(`/training-engagements/${id}`),
+  create: (data) => api.post('/training-engagements', data),
+  update: (id, data) => api.put(`/training-engagements/${id}`, data),
+  delete: (id) => api.delete(`/training-engagements/${id}`)
+};
+
+export const invoiceAPI = {
+  getAll: () => api.get('/invoices'),
+  create: (data) => api.post('/invoices', data),
+  update: (id, data) => api.put(`/invoices/${id}`, data),
+  delete: (id) => api.delete(`/invoices/${id}`)
+};
+
+export const paymentDetailsAPI = {
+  getAll: () => api.get('/payment-details'),
+  upsert: (data) => api.post('/payment-details', data),
+  delete: (id) => api.delete(`/payment-details/${id}`)
+};
+
 export default api;

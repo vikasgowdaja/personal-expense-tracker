@@ -1,55 +1,5 @@
-import React, { useMemo, useState } from 'react';
-
-const TOPICS = [
-  'Core Java',
-  'Java FSD',
-  'MERN Stack',
-  'MEAN Stack',
-  'Python',
-  'AWS Cloud',
-  'Azure Cloud',
-  'Database',
-  'Frontend Development',
-  'Backend Development',
-  'Linux & Shell Scripting',
-  'DevOps (CI/CD, Docker, Kubernetes)',
-  'GenAI & LLM',
-  'Telecom (OSS/BSS, 2G-5G)',
-  'SDLC & Agile',
-  'Data Engineering',
-  'React.js',
-  'Node.js',
-  'Spring Boot',
-  'FastAPI',
-  'TypeScript',
-  'MongoDB',
-  'PostgreSQL',
-  'Docker & Kubernetes',
-  'Jenkins CI/CD',
-  'LangChain & RAG',
-  'Interview Preparation',
-  'Other'
-];
-
-const ORGANIZATIONS = [
-  'ByteXL',
-  'ICT Academy',
-  'Bizotic',
-  'JV Global',
-  'Atom',
-  'SeventhSense',
-  'Dlithe',
-  'LTI Mindtree',
-  'Ancile Digital',
-  'Infosys (Pre-joining)',
-  'TCS (Pre-joining)',
-  'Capgemini (Pre-joining)',
-  'Wipro (Pre-joining)',
-  'Accenture (Pre-joining)',
-  'IBM (Pre-joining)',
-  'IIT Guwahati',
-  'Other / Private'
-];
+import React, { useEffect, useMemo, useState } from 'react';
+import { institutionAPI, topicAPI } from '../../services/api';
 
 const SESSION_TYPES = [
   'Workshop',
@@ -166,6 +116,8 @@ function TeachingHub() {
     JSON.parse(localStorage.getItem('trainer_profiles') || '[]')
   );
   const [form, setForm] = useState(EMPTY_FORM);
+  const [topicOptions, setTopicOptions] = useState([]);
+  const [institutionOptions, setInstitutionOptions] = useState([]);
   const [editId, setEditId] = useState(null);
   const [filterTopic, setFilterTopic] = useState('');
   const [filterOrg, setFilterOrg] = useState('');
@@ -176,6 +128,49 @@ function TeachingHub() {
   const refreshTrainers = () => {
     setTrainers(JSON.parse(localStorage.getItem('trainer_profiles') || '[]'));
   };
+
+  const refreshInstitutions = async () => {
+    try {
+      const res = await institutionAPI.getAll();
+      const apiNames = (res.data || [])
+        .map((item) => (item.name || '').trim())
+        .filter(Boolean);
+      const savedInstitutionNames = JSON.parse(localStorage.getItem('teaching_sessions') || '[]')
+        .map((item) => (item.organization || '').trim())
+        .filter(Boolean);
+      const merged = [...new Set([...apiNames, ...savedInstitutionNames])];
+      setInstitutionOptions(merged);
+    } catch (err) {
+      const savedInstitutionNames = JSON.parse(localStorage.getItem('teaching_sessions') || '[]')
+        .map((item) => (item.organization || '').trim())
+        .filter(Boolean);
+      setInstitutionOptions([...new Set(savedInstitutionNames)]);
+    }
+  };
+
+  const refreshTopics = async () => {
+    try {
+      const res = await topicAPI.getAll();
+      const apiNames = (res.data || [])
+        .filter((item) => item.isActive !== false)
+        .map((item) => (item.name || '').trim())
+        .filter(Boolean);
+      const savedTopics = JSON.parse(localStorage.getItem('teaching_sessions') || '[]')
+        .map((item) => (item.topic || '').trim())
+        .filter(Boolean);
+      setTopicOptions([...new Set([...apiNames, ...savedTopics])]);
+    } catch (err) {
+      const savedTopics = JSON.parse(localStorage.getItem('teaching_sessions') || '[]')
+        .map((item) => (item.topic || '').trim())
+        .filter(Boolean);
+      setTopicOptions([...new Set(savedTopics)]);
+    }
+  };
+
+  useEffect(() => {
+    refreshInstitutions();
+    refreshTopics();
+  }, []);
 
   const persist = (next) => {
     localStorage.setItem('teaching_sessions', JSON.stringify(next));
@@ -208,7 +203,7 @@ function TeachingHub() {
       return;
     }
     if (!resolvedOrg) {
-      window.alert('Please select or enter an organization/college.');
+      window.alert('Please select or enter an institution.');
       return;
     }
     if (!form.duration || isNaN(Number(form.duration)) || Number(form.duration) <= 0) {
@@ -256,14 +251,22 @@ function TeachingHub() {
       persist([record, ...sessions]);
     }
 
+    if (resolvedOrg && !institutionOptions.includes(resolvedOrg)) {
+      setInstitutionOptions((prev) => [resolvedOrg, ...prev]);
+    }
+    if (resolvedTopic && !topicOptions.includes(resolvedTopic)) {
+      setTopicOptions((prev) => [resolvedTopic, ...prev]);
+    }
+
     setForm(EMPTY_FORM);
     setEditId(null);
   };
 
   const handleEdit = (session) => {
     refreshTrainers();
-    const isCustomTopic = !TOPICS.includes(session.topic);
-    const isCustomOrg = !ORGANIZATIONS.includes(session.organization);
+    refreshInstitutions();
+    const isCustomTopic = !topicOptions.includes(session.topic);
+    const isCustomOrg = !institutionOptions.includes(session.organization);
     setForm({
       topic: isCustomTopic ? 'Other' : session.topic,
       customTopic: isCustomTopic ? session.topic : '',
@@ -381,8 +384,8 @@ function TeachingHub() {
     <section className="ops-page">
       <div className="ops-page-header">
         <div>
-          <h1>Teaching Hub</h1>
-          <p>Log training sessions, track topics, learners, and organizations — all in one place.</p>
+          <h1>Training Engagement Hub</h1>
+          <p>Log engagements, track training curriculum, institutions, and learners in one place.</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button
@@ -393,7 +396,7 @@ function TeachingHub() {
           </button>
           <button
             className={`btn ${activeTab === 'log' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => { refreshTrainers(); setActiveTab('log'); setEditId(null); setForm(EMPTY_FORM); }}
+            onClick={() => { refreshTrainers(); refreshInstitutions(); refreshTopics(); setActiveTab('log'); setEditId(null); setForm(EMPTY_FORM); }}
           >
             {editId ? 'Editing…' : '+ Log Session'}
           </button>
@@ -426,11 +429,11 @@ function TeachingHub() {
         </div>
         <div className="ops-card summary-card teaching-stat-card">
           <div className="stat-value" style={{ fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stats.topTopic}</div>
-          <div className="stat-label">Top Topic</div>
+          <div className="stat-label">Top Training Topic</div>
         </div>
         <div className="ops-card summary-card teaching-stat-card accent-green">
           <div className="stat-value" style={{ fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stats.topOrg}</div>
-          <div className="stat-label">Top Organization</div>
+          <div className="stat-label">Top Institution</div>
         </div>
       </div>
 
@@ -446,7 +449,7 @@ function TeachingHub() {
             )}
           </div>
           <div className="ops-card">
-            <h3 style={{ marginBottom: '1rem', fontSize: '0.95rem', color: 'var(--ops-text-secondary)' }}>Organization / College Distribution</h3>
+            <h3 style={{ marginBottom: '1rem', fontSize: '0.95rem', color: 'var(--ops-text-secondary)' }}>Institution Distribution</h3>
             {stats.topOrgs.length === 0 ? (
               <p style={{ color: 'var(--ops-text-secondary)', fontStyle: 'italic', fontSize: '0.875rem' }}>No sessions logged yet.</p>
             ) : (
@@ -492,15 +495,16 @@ function TeachingHub() {
       {/* ── LOG SESSION TAB ── */}
       {activeTab === 'log' && (
         <div className="ops-card" style={{ marginTop: '1.5rem', maxWidth: '700px' }}>
-          <h3 style={{ marginBottom: '1.25rem' }}>{editId ? 'Edit Session' : 'Log a Teaching Session'}</h3>
+          <h3 style={{ marginBottom: '1.25rem' }}>{editId ? 'Edit Engagement' : 'Log a Training Engagement'}</h3>
           <form onSubmit={handleSave}>
             <div className="ops-grid-two">
               {/* Topic */}
               <div className="form-group">
-                <label>Topic / Subject *</label>
+                <label>Training Topic / Curriculum *</label>
                 <select className="form-control" value={form.topic} onChange={(e) => handleField('topic', e.target.value)}>
                   <option value="">— Select Topic —</option>
-                  {TOPICS.map((t) => (<option key={t} value={t}>{t}</option>))}
+                  {topicOptions.map((t) => (<option key={t} value={t}>{t}</option>))}
+                  <option value="Other">Other / Custom</option>
                 </select>
               </div>
               {form.topic === 'Other' && (
@@ -518,7 +522,7 @@ function TeachingHub() {
 
               {/* Session Type */}
               <div className="form-group">
-                <label>Session Type</label>
+                <label>Engagement Type</label>
                 <select className="form-control" value={form.sessionType} onChange={(e) => handleField('sessionType', e.target.value)}>
                   {SESSION_TYPES.map((t) => (<option key={t} value={t}>{t}</option>))}
                 </select>
@@ -526,15 +530,16 @@ function TeachingHub() {
 
               {/* Organization */}
               <div className="form-group">
-                <label>Organization / College *</label>
+                <label>Institution *</label>
                 <select className="form-control" value={form.organization} onChange={(e) => handleField('organization', e.target.value)}>
-                  <option value="">— Select Organization —</option>
-                  {ORGANIZATIONS.map((o) => (<option key={o} value={o}>{o}</option>))}
+                  <option value="">— Select Institution —</option>
+                  {institutionOptions.map((o) => (<option key={o} value={o}>{o}</option>))}
+                  <option value="Other / Private">Other / Private</option>
                 </select>
               </div>
               {form.organization === 'Other / Private' && (
                 <div className="form-group">
-                  <label>Custom Organization *</label>
+                  <label>Custom Institution *</label>
                   <input
                     className="form-control"
                     type="text"
@@ -545,9 +550,9 @@ function TeachingHub() {
                 </div>
               )}
 
-              {/* Duration */}
+              {/* Engagement Period Inputs */}
               <div className="form-group">
-                <label>Duration (hours) *</label>
+                <label>Daily Duration (hours) *</label>
                 <input
                   className="form-control"
                   type="number"
@@ -572,9 +577,9 @@ function TeachingHub() {
                 />
               </div>
 
-              {/* Batch Name */}
+              {/* Batch / Cohort */}
               <div className="form-group">
-                <label>Batch / Session Name</label>
+                <label>Batch / Cohort Name</label>
                 <input
                   className="form-control"
                   type="text"
@@ -612,9 +617,9 @@ function TeachingHub() {
                 )}
               </div>
 
-              {/* Linked Trainer */}
+              {/* Linked Trainer / Instructor */}
               <div className="form-group">
-                <label>Linked Trainer</label>
+                <label>Trainer / Instructor ID</label>
                 <select
                   className="form-control"
                   value={form.trainerId}
@@ -660,7 +665,7 @@ function TeachingHub() {
       {activeTab === 'records' && (
         <div className="ops-card" style={{ marginTop: '1.5rem' }}>
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <h3 style={{ margin: 0 }}>All Sessions</h3>
+            <h3 style={{ margin: 0 }}>All Engagements</h3>
             <select
               className="form-control"
               style={{ width: 'auto', minWidth: '180px' }}
@@ -676,7 +681,7 @@ function TeachingHub() {
               value={filterOrg}
               onChange={(e) => setFilterOrg(e.target.value)}
             >
-              <option value="">All Organizations</option>
+              <option value="">All Institutions</option>
               {allOrgsInData.map((o) => (<option key={o} value={o}>{o}</option>))}
             </select>
             <select
@@ -709,8 +714,8 @@ function TeachingHub() {
                     <th>End Date</th>
                     <th>Span</th>
                     <th>Topic</th>
-                    <th>Session Type</th>
-                    <th>Organization</th>
+                    <th>Engagement Type</th>
+                    <th>Institution</th>
                     <th>Batch</th>
                     <th>Trainer</th>
                     <th>Duration</th>
