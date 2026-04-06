@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { trainingEngagementAPI } from '../../services/api';
+import { useNavigate } from 'react-router-dom';
 
 const STATUS_ORDER = ['Planned', 'Ongoing', 'Completed', 'Invoiced', 'Paid'];
 const SETTLEMENT_STATUS = ['Planned', 'Partially Paid', 'Paid'];
@@ -213,6 +214,8 @@ function flattenTrainingRecords(engagements) {
 const TABS = ['By Organization', 'By Trainer', 'All Engagements'];
 
 export default function Payments() {
+  const navigate = useNavigate();
+  const SHOW_SETTLEMENT_IN_PAYMENTS = false;
   const [engagements, setEngagements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
@@ -1040,6 +1043,20 @@ export default function Payments() {
         ))}
       </div>
 
+      <article className="ops-card" style={{ marginBottom: '1.2rem', display: 'flex', justifyContent: 'space-between', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div>
+          <h3 style={{ margin: 0 }}>Trainer Settlement Moved</h3>
+          <p className="muted" style={{ margin: '0.3rem 0 0' }}>
+            Use the dedicated Trainer Settlement section for cleared/pending view, pending reasons, and 30/45-day cycle tracking.
+          </p>
+        </div>
+        <button className="btn btn-primary" onClick={() => navigate('/trainer-settlements')}>
+          Open Trainer Settlement
+        </button>
+      </article>
+
+      {SHOW_SETTLEMENT_IN_PAYMENTS && (
+      <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
         <div className="ops-card" style={{ padding: '1rem 1.25rem' }}>
           <p className="muted" style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>Incoming Revenue (Received)</p>
@@ -1467,6 +1484,9 @@ export default function Payments() {
           </table>
         </div>
       </article>
+
+      </>
+      )}
 
       {/* ── Filters ── */}
       <div className="ops-card" style={{ marginBottom: '1.25rem' }}>

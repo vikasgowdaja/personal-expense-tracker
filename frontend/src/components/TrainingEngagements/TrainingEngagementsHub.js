@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { clientAPI, institutionAPI, topicAPI } from '../../services/api';
 
+const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 const ENGAGEMENT_TYPES = [
   'Batch Training',
   'Workshop',
@@ -23,8 +25,11 @@ const EMPTY_FORM = {
   customCollege: '',
   organization: '',
   customOrganization: '',
+  dateMode: 'selected',
   startDate: new Date().toISOString().slice(0, 10),
   endDate: new Date().toISOString().slice(0, 10),
+  selectedDates: [new Date().toISOString().slice(0, 10)],
+  bulkDateInput: new Date().toISOString().slice(0, 10),
   dailyHours: '',
   learners: '',
   ratePerDay: '',
@@ -33,15 +38,66 @@ const EMPTY_FORM = {
   paymentStatus: 'Invoiced'
 };
 
-function spanDays(start, end) {
-  if (!start || !end) return 0;
-  const diff = new Date(end) - new Date(start);
-  return Math.max(1, Math.round(diff / 86400000) + 1);
+function normalizeDateList(dateList) {
+  return [...new Set((dateList || []).filter(Boolean))].sort((a, b) => new Date(a) - new Date(b));
+}
+
+function parseBulkDates(value) {
+  return normalizeDateList(
+    String(value || '')
+      .split(/[\n,]+/)
+      .map((item) => item.trim())
+      .filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item))
+  );
+}
+
+function getEffectiveDates(rowOrForm) {
+  if (rowOrForm.dateMode === 'selected') {
+    return normalizeDateList(rowOrForm.selectedDates || []);
+  }
+  if (!rowOrForm.startDate || !rowOrForm.endDate) {
+    return [];
+  }
+  const dates = [];
+  const cursor = new Date(rowOrForm.startDate);
+  const end = new Date(rowOrForm.endDate);
+  while (cursor <= end) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+function getTotalDays(rowOrForm) {
+  return getEffectiveDates(rowOrForm).length;
+}
+
+function getDateRangeFromDates(dateList) {
+  const normalized = normalizeDateList(dateList);
+  if (normalized.length === 0) {
+    return { startDate: '', endDate: '' };
+  }
+  return {
+    startDate: normalized[0],
+    endDate: normalized[normalized.length - 1]
+  };
+}
+
+function formatDateSummary(row) {
+  const dates = normalizeDateList(row.selectedDates || []);
+  if ((row.dateMode || 'range') === 'selected' && dates.length > 0) {
+    return `${formatDate(dates[0])} -> ${formatDate(dates[dates.length - 1])} (${dates.length} selected)`;
+  }
+  return `${formatDate(row.startDate)} -> ${formatDate(row.endDate)}`;
 }
 
 function formatDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function formatMonthLabel(date) {
+  return date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 }
 
 function toInr(value) {
@@ -79,6 +135,10 @@ function TrainingEngagementsHub() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [editId, setEditId] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
+  const [pickerMonth, setPickerMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
 
   const [topicOptions, setTopicOptions] = useState([]);
   const [collegeOptions, setCollegeOptions] = useState([]);
@@ -157,6 +217,38 @@ function TrainingEngagementsHub() {
     });
   };
 
+  const handleBulkDateInput = (value) => {
+    const selectedDates = parseBulkDates(value);
+    const range = getDateRangeFromDates(selectedDates);
+    setForm((prev) => ({
+      ...prev,
+      bulkDateInput: value,
+      selectedDates,
+      startDate: range.startDate,
+      endDate: range.endDate
+    }));
+  };
+
+  const toggleCalendarDate = (dateKey) => {
+    setForm((prev) => {
+      const current = new Set(normalizeDateList(prev.selectedDates || []));
+      if (current.has(dateKey)) {
+        current.delete(dateKey);
+      } else {
+        current.add(dateKey);
+      }
+      const selectedDates = normalizeDateList(Array.from(current));
+      const range = getDateRangeFromDates(selectedDates);
+      return {
+        ...prev,
+        selectedDates,
+        bulkDateInput: selectedDates.join('\n'),
+        startDate: range.startDate,
+        endDate: range.endDate
+      };
+    });
+  };
+
   const resolvedTopic = form.topic === 'Other' ? form.customTopic.trim() : form.topic;
   const resolvedCollege = form.college === 'Other College' ? form.customCollege.trim() : form.college;
   const resolvedOrg = form.organization === 'Other / External' ? form.customOrganization.trim() : form.organization;
@@ -175,17 +267,19 @@ function TrainingEngagementsHub() {
       window.alert('Please select an organization.');
       return;
     }
-    if (!form.startDate || !form.endDate) {
-      window.alert('Please select start and end dates.');
+    if (normalizeDateList(form.selectedDates).length === 0) {
+      window.alert('Please enter at least one valid engagement date.');
       return;
     }
 
-    const totalDays = spanDays(form.startDate, form.endDate);
+    const effectiveDates = getEffectiveDates(form);
+    const totalDays = effectiveDates.length;
     const rate = Number(form.ratePerDay || 0);
     const grossAmount = totalDays * rate;
     const tdsApplicable = form.tdsApplicable !== false;
     const tdsAmount = tdsApplicable ? (grossAmount * DEFAULT_TDS_PERCENT) / 100 : 0;
     const netAmount = grossAmount - tdsAmount;
+    const effectiveRange = getDateRangeFromDates(effectiveDates);
 
     const record = {
       id: editId || Date.now().toString(),
@@ -195,8 +289,10 @@ function TrainingEngagementsHub() {
       trainerName: form.trainerName || '',
       college: resolvedCollege,
       organization: resolvedOrg,
-      startDate: form.startDate,
-      endDate: form.endDate,
+      dateMode: 'selected',
+      startDate: effectiveRange.startDate,
+      endDate: effectiveRange.endDate,
+      selectedDates: effectiveDates,
       totalDays,
       dailyHours: Number(form.dailyHours || 0),
       learners: Number(form.learners || 0),
@@ -247,8 +343,11 @@ function TrainingEngagementsHub() {
       customCollege: isCustomCollege ? row.college : '',
       organization: isCustomOrg ? 'Other / External' : row.organization,
       customOrganization: isCustomOrg ? row.organization : '',
+      dateMode: 'selected',
       startDate: row.startDate,
       endDate: row.endDate,
+      selectedDates: normalizeDateList(row.selectedDates || getEffectiveDates(row)),
+      bulkDateInput: normalizeDateList(row.selectedDates || getEffectiveDates(row)).join('\n'),
       dailyHours: String(row.dailyHours || ''),
       learners: String(row.learners || ''),
       ratePerDay: String(row.ratePerDay || ''),
@@ -256,6 +355,10 @@ function TrainingEngagementsHub() {
       tdsApplicable: row.tdsApplicable !== false,
       paymentStatus: row.paymentStatus || 'Invoiced'
     });
+
+    const pivotDate = row.startDate || row.selectedDates?.[0] || new Date().toISOString().slice(0, 10);
+    const pivot = new Date(pivotDate);
+    setPickerMonth(new Date(pivot.getFullYear(), pivot.getMonth(), 1));
 
     setEditId(row.id);
     setActiveTab('log');
@@ -270,6 +373,8 @@ function TrainingEngagementsHub() {
   const handleCancel = () => {
     setEditId('');
     setForm(EMPTY_FORM);
+    const now = new Date();
+    setPickerMonth(new Date(now.getFullYear(), now.getMonth(), 1));
   };
 
   const stats = useMemo(() => {
@@ -300,6 +405,31 @@ function TrainingEngagementsHub() {
     });
   }, [engagements, filterCollege, filterOrganization, filterTrainer, filterStatus]);
 
+  const calendarCells = useMemo(() => {
+    const start = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth(), 1);
+    const end = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() + 1, 0);
+    const leading = start.getDay();
+    const selected = new Set(normalizeDateList(form.selectedDates || []));
+    const cells = [];
+
+    for (let i = 0; i < leading; i += 1) {
+      cells.push({ key: `blank-${i}`, blank: true });
+    }
+
+    for (let day = 1; day <= end.getDate(); day += 1) {
+      const date = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth(), day);
+      const key = date.toISOString().slice(0, 10);
+      cells.push({
+        key,
+        blank: false,
+        day,
+        selected: selected.has(key)
+      });
+    }
+
+    return cells;
+  }, [pickerMonth, form.selectedDates]);
+
   return (
     <section className="ops-page">
       <div className="ops-page-header">
@@ -309,7 +439,7 @@ function TrainingEngagementsHub() {
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button className={`btn ${activeTab === 'overview' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setActiveTab('overview')}>Overview</button>
-          <button className={`btn ${activeTab === 'log' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setActiveTab('log'); setEditId(''); setForm(EMPTY_FORM); refreshLookups(); }}>{editId ? 'Editing...' : '+ Add Engagement'}</button>
+          <button className={`btn ${activeTab === 'log' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setActiveTab('log'); setEditId(''); setForm(EMPTY_FORM); setPickerMonth(new Date()); refreshLookups(); }}>{editId ? 'Editing...' : '+ Add Engagement'}</button>
           <button className={`btn ${activeTab === 'records' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setActiveTab('records')}>Records</button>
         </div>
       </div>
@@ -391,16 +521,54 @@ function TrainingEngagementsHub() {
                 </div>
               )}
 
-              <div className="form-group">
-                <label>Start Date *</label>
-                <input className="form-control" type="date" value={form.startDate} onChange={(e) => handleField('startDate', e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label>End Date *</label>
-                <input className="form-control" type="date" min={form.startDate} value={form.endDate} onChange={(e) => handleField('endDate', e.target.value)} />
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>Training Dates *</label>
+                <div className="ops-card" style={{ padding: '0.9rem', marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+                    <button className="btn btn-secondary" type="button" onClick={() => setPickerMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}>Previous</button>
+                    <strong>{formatMonthLabel(pickerMonth)}</strong>
+                    <button className="btn btn-secondary" type="button" onClick={() => setPickerMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}>Next</button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.35rem', marginBottom: '0.35rem' }}>
+                    {WEEK_DAYS.map((label) => (
+                      <div key={label} style={{ textAlign: 'center', fontSize: '0.74rem', color: 'var(--ops-text-secondary)', fontWeight: 600 }}>
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.35rem' }}>
+                    {calendarCells.map((cell) => (
+                      cell.blank ? (
+                        <div key={cell.key} style={{ minHeight: '38px' }} />
+                      ) : (
+                        <button
+                          key={cell.key}
+                          type="button"
+                          className={`btn ${cell.selected ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ minHeight: '38px', padding: '0.35rem', fontSize: '0.82rem' }}
+                          onClick={() => toggleCalendarDate(cell.key)}
+                        >
+                          {cell.day}
+                        </button>
+                      )
+                    ))}
+                  </div>
+                </div>
+                <textarea
+                  className="form-control"
+                  rows={5}
+                  value={form.bulkDateInput}
+                  onChange={(e) => handleBulkDateInput(e.target.value)}
+                  placeholder={['2026-04-08', '2026-04-10', '2026-04-15'].join('\n')}
+                />
                 <span style={{ fontSize: '0.78rem', color: 'var(--ops-text-secondary)', marginTop: '4px', display: 'block' }}>
-                  Total Days: {spanDays(form.startDate, form.endDate)}
+                  Enter one date per line or comma separated. Dates can be random/non-contiguous. Total Days: {getTotalDays(form)}
                 </span>
+                {normalizeDateList(form.selectedDates).length > 0 && (
+                  <span style={{ fontSize: '0.78rem', color: 'var(--ops-text-secondary)', marginTop: '4px', display: 'block' }}>
+                    Coverage: {formatDate(form.startDate)} {'->'} {formatDate(form.endDate)}
+                  </span>
+                )}
               </div>
 
               <div className="form-group">
@@ -442,7 +610,7 @@ function TrainingEngagementsHub() {
 
             <div style={{ marginBottom: '0.9rem', fontSize: '0.84rem', color: 'var(--ops-text-secondary)' }}>
               {(() => {
-                const totalDays = spanDays(form.startDate, form.endDate);
+                const totalDays = getTotalDays(form);
                 const gross = totalDays * Number(form.ratePerDay || 0);
                 const tds = form.tdsApplicable ? (gross * DEFAULT_TDS_PERCENT) / 100 : 0;
                 const net = gross - tds;
@@ -514,7 +682,7 @@ function TrainingEngagementsHub() {
                       <td>{x.trainerName || '—'}</td>
                       <td>{x.college}</td>
                       <td>{x.organization}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{formatDate(x.startDate)} {'->'} {formatDate(x.endDate)}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{formatDateSummary(x)}</td>
                       <td>{x.totalDays}</td>
                       <td>{x.dailyHours || '—'}</td>
                       <td>{toInr(x.ratePerDay)}</td>
@@ -564,7 +732,7 @@ function TrainingEngagementsHub() {
                       <td>{x.trainerName || '—'}</td>
                       <td>{x.college}</td>
                       <td>{x.organization}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{formatDate(x.startDate)} {'->'} {formatDate(x.endDate)}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{formatDateSummary(x)}</td>
                       <td>{x.totalDays}</td>
                       <td>{toInr(getGrossAmount(x))}</td>
                       <td>{toInr(getTdsAmount(x))}</td>

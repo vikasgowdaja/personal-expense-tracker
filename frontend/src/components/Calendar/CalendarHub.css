@@ -1,0 +1,88 @@
+.calendar-cell-day {
+  position: relative;
+}
+
+.calendar-hover-popup {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  transform: translateX(-50%);
+  z-index: 12;
+  background: #111827;
+  color: #f9fafb;
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  min-width: 140px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.68rem;
+  pointer-events: none;
+}
+
+.calendar-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 1rem;
+}
+
+.calendar-modal {
+  width: min(780px, 96vw);
+  max-height: 88vh;
+  overflow: auto;
+  background: var(--ops-card-bg, #ffffff);
+  border: 1px solid var(--ops-border, #e5e7eb);
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.calendar-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.calendar-modal-head h3 {
+  margin: 0;
+}
+
+.calendar-modal-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.calendar-modal-stats .ops-card {
+  padding: 0.7rem;
+}
+
+.calendar-modal-stats p {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+.calendar-modal-list h4 {
+  margin: 0 0 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .calendar-hover-popup {
+    display: none;
+  }
+
+  .calendar-modal {
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 10px;
+    padding: 0.8rem;
+  }
+}

@@ -18,6 +18,7 @@ import Colleges from './components/Colleges/Colleges';
 import Organizations from './components/Organizations/Organizations';
 import Trainers from './components/Trainers/Trainers';
 import Topics from './components/Topics/Topics';
+import TrainersSettlement from './components/TrainersSettlement/TrainersSettlement';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -65,6 +66,7 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="calendar" element={<CalendarHub />} />
             <Route path="finance" element={<Payments />} />
+            <Route path="trainer-settlements" element={<TrainersSettlement />} />
             <Route path="expenses" element={<ExpenseList />} />
             <Route path="insights" element={<Insights />} />
             <Route path="profile" element={<Profile />} />

@@ -5,6 +5,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: 'home' },
   { to: '/calendar', label: 'Calendar', icon: 'calendar' },
   { to: '/finance', label: 'Payments', icon: 'payments' },
+  { to: '/trainer-settlements', label: 'Trainer Settlement', icon: 'payments' },
   { to: '/training-engagements', label: 'Training Engagements', icon: 'teaching' },
   { to: '/trainers', label: 'Trainers', icon: 'trainer' },
   { to: '/topics', label: 'Topics', icon: 'topic' },

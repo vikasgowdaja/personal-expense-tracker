@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { expenseAPI } from '../../services/api';
+import React, { useMemo, useState } from 'react';
+import './CalendarHub.css';
 
 const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -11,11 +11,40 @@ function formatMonthLabel(date) {
   return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 }
 
-function getDayTypeClass(dayType) {
-  if (dayType === 'full-time') return 'calendar-dot-full-time';
-  if (dayType === 'hustle') return 'calendar-dot-hustle';
-  if (dayType === 'both') return 'calendar-dot-both';
-  return 'calendar-dot-neutral';
+function fmt(n) {
+  return `₹${Number(n || 0).toLocaleString('en-IN')}`;
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function getTrainingEngagements() {
+  try {
+    return JSON.parse(localStorage.getItem('training_engagements') || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function getTrainerSettlements() {
+  try {
+    return JSON.parse(localStorage.getItem('trainer_settlements') || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function normalizeDay(dateLike) {
+  const dt = new Date(dateLike);
+  if (Number.isNaN(dt.getTime())) return null;
+  dt.setHours(0, 0, 0, 0);
+  return dt;
+}
+
+function normalizeDateList(dateList) {
+  return [...new Set((dateList || []).filter(Boolean))].sort((a, b) => new Date(a) - new Date(b));
 }
 
 function CalendarHub() {
@@ -23,79 +52,95 @@ function CalendarHub() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [expenses, setExpenses] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(() => formatDateKey(new Date()));
+  const [hoverDate, setHoverDate] = useState('');
+  const [popupDate, setPopupDate] = useState('');
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await expenseAPI.getAll();
-        setExpenses(res.data || []);
-      } catch (error) {
-        console.error('Calendar expense sync failed:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, []);
-
-  const dailyLogs = useMemo(() => {
-    return JSON.parse(localStorage.getItem('daily_logs') || '[]');
-  }, []);
+  const trainingEngagements = getTrainingEngagements();
+  const trainerSettlements = getTrainerSettlements();
 
   const mergedByDate = useMemo(() => {
     const byDate = {};
 
-    dailyLogs.forEach((log) => {
-      const key = formatDateKey(new Date(log.createdAt || Date.now()));
+    const ensureDay = (key) => {
       if (!byDate[key]) {
         byDate[key] = {
           date: key,
-          logs: [],
-          payments: [],
-          expenses: [],
-          dayType: 'unknown'
+          engagementCount: 0,
+          settlementCount: 0,
+          paidSettlementCount: 0,
+          engagements: [],
+          settlements: []
         };
       }
+      return byDate[key];
+    };
 
-      byDate[key].logs.push(log);
-      byDate[key].dayType = log.dayType || byDate[key].dayType;
+    trainingEngagements.forEach((engagement) => {
+      const explicitDates = normalizeDateList(engagement.selectedDates || []);
+      const datesToMap = explicitDates.length > 0
+        ? explicitDates
+        : [engagement.startDate, engagement.endDate].filter(Boolean);
 
-      if (log.finance?.amount) {
-        byDate[key].payments.push({
-          amount: Number(log.finance.amount || 0),
-          status: log.finance.status || 'received',
-          source: 'voice-log'
-        });
+      if (explicitDates.length === 0 && datesToMap.length === 2) {
+        const start = normalizeDay(engagement.startDate);
+        const end = normalizeDay(engagement.endDate || engagement.startDate);
+        if (!start || !end) return;
+        const from = start.getTime() <= end.getTime() ? start : end;
+        const to = start.getTime() <= end.getTime() ? end : start;
+        const cursor = new Date(from);
+        while (cursor.getTime() <= to.getTime()) {
+          const key = formatDateKey(cursor);
+          const day = ensureDay(key);
+          day.engagementCount += 1;
+          day.engagements.push({
+            id: engagement.id,
+            topic: engagement.topic || engagement.notes || 'Training Engagement',
+            college: engagement.college || 'Unknown College',
+            organization: engagement.organization || '—',
+            trainerName: engagement.trainerName || 'Unknown Trainer',
+            paymentStatus: engagement.paymentStatus || 'Invoiced'
+          });
+          cursor.setDate(cursor.getDate() + 1);
+        }
+        return;
       }
+
+      datesToMap.forEach((dateValue) => {
+        const normalized = normalizeDay(dateValue);
+        if (!normalized) return;
+        const key = formatDateKey(normalized);
+        const day = ensureDay(key);
+        day.engagementCount += 1;
+        day.engagements.push({
+          id: engagement.id,
+          topic: engagement.topic || engagement.notes || 'Training Engagement',
+          college: engagement.college || 'Unknown College',
+          organization: engagement.organization || '—',
+          trainerName: engagement.trainerName || 'Unknown Trainer',
+          paymentStatus: engagement.paymentStatus || 'Invoiced'
+        });
+      });
     });
 
-    expenses.forEach((expense) => {
-      const key = formatDateKey(new Date(expense.date || Date.now()));
-      if (!byDate[key]) {
-        byDate[key] = {
-          date: key,
-          logs: [],
-          payments: [],
-          expenses: [],
-          dayType: 'unknown'
-        };
+    trainerSettlements.forEach((settlement) => {
+      const key = formatDateKey(new Date(settlement.paidDate || settlement.updatedAt || Date.now()));
+      const day = ensureDay(key);
+      day.settlementCount += 1;
+      if (settlement.status === 'Paid') {
+        day.paidSettlementCount += 1;
       }
-
-      byDate[key].expenses.push(expense);
-      const status = expense.description?.toLowerCase().includes('pending') ? 'pending' : 'received';
-      byDate[key].payments.push({
-        amount: Number(expense.amount || 0),
-        status,
-        source: expense.category || 'expense'
+      day.settlements.push({
+        id: settlement.id,
+        trainerName: settlement.trainerName || 'Unknown Trainer',
+        engagementLabel: settlement.engagementLabel || '—',
+        amount: Number(settlement.amount || 0),
+        status: settlement.status || 'Planned'
       });
     });
 
     return byDate;
-  }, [dailyLogs, expenses]);
+  }, [trainingEngagements, trainerSettlements]);
 
   const monthCells = useMemo(() => {
     const startDay = new Date(cursorMonth.getFullYear(), cursorMonth.getMonth(), 1);
@@ -126,19 +171,14 @@ function CalendarHub() {
 
   const selectedDetails = mergedByDate[selectedDate] || {
     date: selectedDate,
-    logs: [],
-    payments: [],
-    expenses: [],
-    dayType: 'unknown'
+    engagementCount: 0,
+    settlementCount: 0,
+    paidSettlementCount: 0,
+    engagements: [],
+    settlements: []
   };
 
-  const selectedPending = selectedDetails.payments
-    .filter((item) => item.status === 'pending')
-    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
-  const selectedReceived = selectedDetails.payments
-    .filter((item) => item.status === 'received')
-    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const popupDetails = mergedByDate[popupDate] || selectedDetails;
 
   const goToPrevMonth = () => {
     setCursorMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -152,21 +192,21 @@ function CalendarHub() {
     <section className="ops-page">
       <div className="ops-page-header">
         <h1>Calendar Sync</h1>
-        <p>Daily command center synced with schedule, payments, and activity logs.</p>
+        <p>TEMS-only calendar synced to training engagements and trainer settlements.</p>
       </div>
 
       <div className="summary-cards">
         <article className="ops-card stat-card">
-          <p>Selected Day Type</p>
-          <h3>{selectedDetails.dayType.toUpperCase()}</h3>
+          <p>Engagements on Day</p>
+          <h3>{selectedDetails.engagementCount}</h3>
         </article>
         <article className="ops-card stat-card pending">
-          <p>Pending on Day</p>
-          <h3>${selectedPending.toFixed(2)}</h3>
+          <p>Settlements Logged</p>
+          <h3>{selectedDetails.settlementCount}</h3>
         </article>
         <article className="ops-card stat-card received">
-          <p>Received on Day</p>
-          <h3>${selectedReceived.toFixed(2)}</h3>
+          <p>Settlements Paid</p>
+          <h3>{selectedDetails.paidSettlementCount}</h3>
         </article>
       </div>
 
@@ -191,25 +231,40 @@ function CalendarHub() {
               }
 
               const details = cell.details;
-              const paymentCount = details?.payments?.length || 0;
-              const logCount = details?.logs?.length || 0;
+              const engagementCount = details?.engagementCount || 0;
+              const settlementCount = details?.settlementCount || 0;
               const isSelected = selectedDate === cell.key;
+              const isHovering = hoverDate === cell.key;
 
               return (
                 <button
                   type="button"
                   key={cell.key}
                   className={`calendar-cell calendar-cell-day ${isSelected ? 'calendar-cell-selected' : ''}`}
-                  onClick={() => setSelectedDate(cell.key)}
+                  onClick={() => {
+                    setSelectedDate(cell.key);
+                    setPopupDate(cell.key);
+                  }}
+                  onMouseEnter={() => setHoverDate(cell.key)}
+                  onMouseLeave={() => setHoverDate('')}
+                  onFocus={() => setHoverDate(cell.key)}
+                  onBlur={() => setHoverDate('')}
                 >
                   <div className="calendar-day-head">
                     <span>{cell.date.getDate()}</span>
-                    <span className={`calendar-dot ${getDayTypeClass(details?.dayType)}`} />
+                    <span className={`calendar-dot ${engagementCount > 0 ? 'calendar-dot-hustle' : 'calendar-dot-neutral'}`} />
                   </div>
                   <div className="calendar-cell-meta">
-                    <small>{logCount} logs</small>
-                    <small>{paymentCount} payments</small>
+                    <small>{engagementCount} engagements</small>
+                    <small>{settlementCount} settlements</small>
                   </div>
+                  {isHovering && (
+                    <div className="calendar-hover-popup" role="tooltip">
+                      <strong>{fmtDate(cell.date)}</strong>
+                      <span>{engagementCount} engagements</span>
+                      <span>{settlementCount} settlements</span>
+                    </div>
+                  )}
                 </button>
               );
             })}
@@ -217,44 +272,59 @@ function CalendarHub() {
         </article>
 
         <article className="ops-card">
-          <h3>Daily Unified Feed ({selectedDate})</h3>
-          {loading && <p className="muted">Syncing backend expenses...</p>}
+          <h3>Day Details ({selectedDate})</h3>
 
           <div className="daily-feed-block">
-            <h4>Work and Schedule</h4>
-            {selectedDetails.logs.length === 0 && <p className="muted">No voice logs for this day.</p>}
-            {selectedDetails.logs.map((log) => (
-              <div key={log.id} className="daily-feed-item">
-                <span className={`status-pill ${log.dayType || 'full-time'}`}>{log.dayType || 'unknown'}</span>
-                <p>{log.transcript || 'No transcript text provided.'}</p>
+            <h4>Training Engagements</h4>
+            {selectedDetails.engagements.length === 0 && <p className="muted">No engagements on this day.</p>}
+            {selectedDetails.engagements.map((eng, idx) => (
+              <div key={`${eng.id}-${idx}`} className="daily-feed-item">
+                <p><strong>{eng.topic}</strong></p>
+                <p>{eng.college} | {eng.organization}</p>
+                <p>Trainer: {eng.trainerName} | Status: {eng.paymentStatus}</p>
               </div>
             ))}
           </div>
 
           <div className="daily-feed-block">
-            <h4>Payments</h4>
-            {selectedDetails.payments.length === 0 && <p className="muted">No payment events for this day.</p>}
-            {selectedDetails.payments.map((payment, index) => (
-              <div key={`${payment.source}-${index}`} className="daily-feed-item">
-                <span className={`status-pill ${payment.status}`}>{payment.status}</span>
-                <p>{payment.source}: ${Number(payment.amount || 0).toFixed(2)}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="daily-feed-block">
-            <h4>Expense Records</h4>
-            {selectedDetails.expenses.length === 0 && <p className="muted">No expense entries on this date.</p>}
-            {selectedDetails.expenses.map((expense) => (
-              <div key={expense._id} className="daily-feed-item">
-                <p>
-                  {expense.title} ({expense.category}) - ${Number(expense.amount || 0).toFixed(2)}
-                </p>
+            <h4>Trainer Settlements</h4>
+            {selectedDetails.settlements.length === 0 && <p className="muted">No settlements logged on this day.</p>}
+            {selectedDetails.settlements.map((settlement, index) => (
+              <div key={`${settlement.id}-${index}`} className="daily-feed-item">
+                <p><strong>{settlement.trainerName}</strong> | {settlement.engagementLabel}</p>
+                <p>{fmt(settlement.amount)} | {settlement.status}</p>
               </div>
             ))}
           </div>
         </article>
       </div>
+
+      {popupDate && (
+        <div className="calendar-modal-backdrop" onClick={() => setPopupDate('')}>
+          <div className="calendar-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="calendar-modal-head">
+              <h3>{fmtDate(new Date(popupDate))}</h3>
+              <button type="button" className="btn btn-secondary" onClick={() => setPopupDate('')}>Close</button>
+            </div>
+            <div className="calendar-modal-stats">
+              <div className="ops-card"><p className="muted">Engagements</p><strong>{popupDetails.engagementCount}</strong></div>
+              <div className="ops-card"><p className="muted">Settlements</p><strong>{popupDetails.settlementCount}</strong></div>
+              <div className="ops-card"><p className="muted">Paid Settlements</p><strong>{popupDetails.paidSettlementCount}</strong></div>
+            </div>
+            <div className="calendar-modal-list">
+              <h4>Engagement Details</h4>
+              {popupDetails.engagements.length === 0 && <p className="muted">No engagements on this day.</p>}
+              {popupDetails.engagements.map((eng, idx) => (
+                <div key={`${eng.id}-popup-${idx}`} className="daily-feed-item">
+                  <p><strong>{eng.topic}</strong></p>
+                  <p>{eng.college} | {eng.organization}</p>
+                  <p>Trainer: {eng.trainerName}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
