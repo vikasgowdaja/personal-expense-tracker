@@ -15,6 +15,15 @@ const ENGAGEMENT_TYPES = [
 
 const DEFAULT_TDS_PERCENT = 10;
 
+function toLocalDateKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+const TODAY_KEY = toLocalDateKey(new Date());
+
 const EMPTY_FORM = {
   topic: '',
   customTopic: '',
@@ -26,10 +35,10 @@ const EMPTY_FORM = {
   organization: '',
   customOrganization: '',
   dateMode: 'selected',
-  startDate: new Date().toISOString().slice(0, 10),
-  endDate: new Date().toISOString().slice(0, 10),
-  selectedDates: [new Date().toISOString().slice(0, 10)],
-  bulkDateInput: new Date().toISOString().slice(0, 10),
+  startDate: TODAY_KEY,
+  endDate: TODAY_KEY,
+  selectedDates: [TODAY_KEY],
+  bulkDateInput: TODAY_KEY,
   dailyHours: '',
   learners: '',
   ratePerDay: '',
@@ -62,7 +71,7 @@ function getEffectiveDates(rowOrForm) {
   const cursor = new Date(rowOrForm.startDate);
   const end = new Date(rowOrForm.endDate);
   while (cursor <= end) {
-    dates.push(cursor.toISOString().slice(0, 10));
+    dates.push(toLocalDateKey(cursor));
     cursor.setDate(cursor.getDate() + 1);
   }
   return dates;
@@ -356,7 +365,7 @@ function TrainingEngagementsHub() {
       paymentStatus: row.paymentStatus || 'Invoiced'
     });
 
-    const pivotDate = row.startDate || row.selectedDates?.[0] || new Date().toISOString().slice(0, 10);
+    const pivotDate = row.startDate || row.selectedDates?.[0] || TODAY_KEY;
     const pivot = new Date(pivotDate);
     setPickerMonth(new Date(pivot.getFullYear(), pivot.getMonth(), 1));
 
@@ -418,7 +427,7 @@ function TrainingEngagementsHub() {
 
     for (let day = 1; day <= end.getDate(); day += 1) {
       const date = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth(), day);
-      const key = date.toISOString().slice(0, 10);
+      const key = toLocalDateKey(date);
       cells.push({
         key,
         blank: false,
@@ -658,7 +667,7 @@ function TrainingEngagementsHub() {
               <table className="ops-table">
                 <thead>
                   <tr>
-                    <th>ID</th>
+                    <th className="sno-th">#</th>
                     <th>Topic</th>
                     <th>Trainer</th>
                     <th>College</th>
@@ -675,12 +684,12 @@ function TrainingEngagementsHub() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((x) => (
+                  {filtered.map((x, i) => (
                     <tr key={x.id}>
-                      <td style={{ fontFamily: 'monospace', fontSize: '0.72rem', color: 'var(--ops-text-secondary)' }}>{x.id}</td>
+                      <td className="sno-cell">{i + 1}</td>
                       <td><span className="status-pill pill-blue">{x.topic}</span></td>
                       <td>{x.trainerName || '—'}</td>
-                      <td>{x.college}</td>
+                      <td><span className="college-cell-badge">{x.college}</span></td>
                       <td>{x.organization}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{formatDateSummary(x)}</td>
                       <td>{x.totalDays}</td>
@@ -713,6 +722,7 @@ function TrainingEngagementsHub() {
               <table className="ops-table">
                 <thead>
                   <tr>
+                    <th className="sno-th">#</th>
                     <th>Topic</th>
                     <th>Trainer</th>
                     <th>College</th>
@@ -726,11 +736,12 @@ function TrainingEngagementsHub() {
                   </tr>
                 </thead>
                 <tbody>
-                  {engagements.slice(0, 8).map((x) => (
+                  {engagements.slice(0, 8).map((x, i) => (
                     <tr key={x.id}>
+                      <td className="sno-cell">{i + 1}</td>
                       <td>{x.topic}</td>
                       <td>{x.trainerName || '—'}</td>
-                      <td>{x.college}</td>
+                      <td><span className="college-cell-badge">{x.college}</span></td>
                       <td>{x.organization}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{formatDateSummary(x)}</td>
                       <td>{x.totalDays}</td>

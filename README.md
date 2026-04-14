@@ -1,6 +1,6 @@
-# Personal Expense Tracker - MERN Stack with AI
+# Personal Ops Intelligence - MERN Stack with AI
 
-A full-stack web application for tracking personal expenses built with MongoDB, Express.js, React, and Node.js, **powered by an advanced offline AI system (PFIE)** for intelligent financial analysis.
+A voice-first personal operations platform built with MongoDB, Express.js, React, and Node.js, **powered by an advanced offline AI system (PFIE)** for intelligent financial analysis, daily schedule classification, income tracking, teaching logs, vendor operations, and payment timelines.
 
 ## 🌟 AI Features (PFIE - Offline Personal Financial Intelligence Engine)
 

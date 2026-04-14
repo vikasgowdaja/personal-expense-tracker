@@ -75,8 +75,14 @@ function parseNet(row) {
 export default function TrainersSettlement() {
   const [, setVersion] = useState(0);
   const [agingTrainerFilter, setAgingTrainerFilter] = useState('');
+  const [agingCollegeFilter, setAgingCollegeFilter] = useState('');
+  const [agingOrganizationFilter, setAgingOrganizationFilter] = useState('');
+  const [agingOrgStatusFilter, setAgingOrgStatusFilter] = useState('');
+  const [agingTrainerStatusFilter, setAgingTrainerStatusFilter] = useState('');
   const [agingFromDate, setAgingFromDate] = useState('');
   const [agingToDate, setAgingToDate] = useState('');
+  const [agingSortBy, setAgingSortBy] = useState('age');
+  const [agingSortDir, setAgingSortDir] = useState('desc');
   const [settlementForm, setSettlementForm] = useState({
     id: '',
     trainingRecordId: '',
@@ -309,32 +315,48 @@ export default function TrainersSettlement() {
   }, [settlementForm.trainingRecordId, settlementForm.amount, settlements, engagementOptions]);
 
   const agingRows = useMemo(() => {
+    const orgStatusOrder = { Paid: 1, 'Not Matured': 2, 'Recovery Due': 3, 'Recovery Overdue': 4 };
+    const trainerStatusOrder = { Paid: 1, 'Partially Paid': 2, Pending: 3, 'Not Started': 4 };
+
     return engagementOptions
       .map((eng) => {
         const refDate = eng.endDate || eng.startDate || '';
         const ageDays = daysSince(refDate);
-        const totalPaid = settlements
-          .filter((item) => item.trainingRecordId === eng.id && item.status === 'Paid')
+        const engagementSettlements = settlements.filter((item) => item.trainingRecordId === eng.id);
+        const totalPaid = engagementSettlements
+          .filter((item) => item.status === 'Paid')
           .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        const totalLogged = engagementSettlements.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        const hasSettlementRecord = engagementSettlements.length > 0;
+        const hasPendingSettlement = engagementSettlements.some((item) => item.status !== 'Paid');
 
         const companyReceived = String(eng.paymentStatus || '').toLowerCase() === 'paid';
-        const pendingToTrainer = totalPaid < eng.netAmount;
+        const companyPocketPaid = companyReceived ? 0 : totalPaid;
+        const yetToRecover = companyReceived ? 0 : -(eng.netAmount - totalLogged);
 
-        let reason = 'Cleared';
-        if (!companyReceived && ageDays >= 45) reason = 'Company payment delayed beyond 45 days';
-        else if (!companyReceived && ageDays >= 30) reason = 'Awaiting company payment (crossed 30 days)';
-        else if (!companyReceived) reason = 'Within 30-day cycle waiting for company payment';
-        else if (companyReceived && pendingToTrainer) reason = 'Company paid, trainer settlement pending';
+        let orgPaymentStatus = 'Paid';
+        if (!companyReceived && ageDays >= 45) orgPaymentStatus = 'Recovery Overdue';
+        else if (!companyReceived && ageDays >= 30) orgPaymentStatus = 'Recovery Due';
+        else if (!companyReceived) orgPaymentStatus = 'Not Matured';
+
+        let trainerSettlementStatus = 'Paid';
+        if (!hasSettlementRecord) trainerSettlementStatus = 'Not Started';
+        else if (hasPendingSettlement && totalPaid > 0) trainerSettlementStatus = 'Partially Paid';
+        else if (hasPendingSettlement) trainerSettlementStatus = 'Pending';
 
         return {
           ...eng,
           refDate,
           ageDays,
           totalPaid,
-          marginLeft: eng.netAmount - totalPaid,
+          totalLogged,
+          companyPocketPaid,
+          yetToRecover,
+          marginLeft: eng.netAmount - totalLogged,
           indicator: ageDays >= 45 ? 'Crossed 45 days' : ageDays >= 30 ? 'Crossed 30 days' : 'Within 30 days',
-          reason,
-          pending: reason !== 'Cleared'
+          orgPaymentStatus,
+          trainerSettlementStatus,
+          pending: orgPaymentStatus !== 'Paid' || trainerSettlementStatus !== 'Paid'
         };
       })
       .filter((row) => {
@@ -344,12 +366,39 @@ export default function TrainersSettlement() {
           const byName = selectedName && row.trainerName === selectedName;
           if (!byId && !byName) return false;
         }
+        if (agingCollegeFilter && row.college !== agingCollegeFilter) return false;
+        if (agingOrganizationFilter && row.organization !== agingOrganizationFilter) return false;
+        if (agingOrgStatusFilter && row.orgPaymentStatus !== agingOrgStatusFilter) return false;
+        if (agingTrainerStatusFilter && row.trainerSettlementStatus !== agingTrainerStatusFilter) return false;
         if (agingFromDate && (!row.refDate || new Date(row.refDate) < new Date(agingFromDate))) return false;
         if (agingToDate && (!row.refDate || new Date(row.refDate) > new Date(agingToDate))) return false;
         return true;
       })
-      .sort((a, b) => new Date(a.refDate || 0) - new Date(b.refDate || 0));
-  }, [engagementOptions, settlements, agingTrainerFilter, agingFromDate, agingToDate, trainerNames]);
+      .sort((a, b) => {
+        let comp = 0;
+        if (agingSortBy === 'college') comp = (a.college || '').localeCompare(b.college || '');
+        else if (agingSortBy === 'end_date') comp = new Date(a.refDate || 0) - new Date(b.refDate || 0);
+        else if (agingSortBy === 'age') comp = Number(a.ageDays || 0) - Number(b.ageDays || 0);
+        else if (agingSortBy === 'org_status') comp = (orgStatusOrder[a.orgPaymentStatus] || 99) - (orgStatusOrder[b.orgPaymentStatus] || 99);
+        else if (agingSortBy === 'trainer_status') comp = (trainerStatusOrder[a.trainerSettlementStatus] || 99) - (trainerStatusOrder[b.trainerSettlementStatus] || 99);
+        else comp = Number(a.ageDays || 0) - Number(b.ageDays || 0);
+
+        return agingSortDir === 'asc' ? comp : -comp;
+      });
+  }, [engagementOptions, settlements, agingTrainerFilter, agingCollegeFilter, agingOrganizationFilter, agingOrgStatusFilter, agingTrainerStatusFilter, agingFromDate, agingToDate, agingSortBy, agingSortDir, trainerNames]);
+
+  const agingCollegeOptions = useMemo(
+    () => [...new Set(engagementOptions.map((row) => row.college || 'Unknown College'))].sort((a, b) => a.localeCompare(b)),
+    [engagementOptions]
+  );
+
+  const agingOrganizationOptions = useMemo(
+    () => [...new Set(engagementOptions.map((row) => row.organization || '—'))].sort((a, b) => a.localeCompare(b)),
+    [engagementOptions]
+  );
+
+  const agingOrgStatusOptions = ['Paid', 'Not Matured', 'Recovery Due', 'Recovery Overdue'];
+  const agingTrainerStatusOptions = ['Paid', 'Not Started', 'Partially Paid', 'Pending'];
 
   return (
     <section className="ops-page">
@@ -421,12 +470,12 @@ export default function TrainersSettlement() {
           <table className="ops-table" style={{ margin: 0 }}>
             <thead>
               <tr>
-                <th>Trainer</th><th>Engagement</th><th>Status</th><th>Amount</th><th>Reason</th><th>Action</th>
+                <th className="sno-th">#</th><th>Trainer</th><th>College</th><th>Engagement</th><th>Status</th><th>Amount</th><th>Reason</th><th>Action</th>
               </tr>
             </thead>
             <tbody>
-              {settlements.length === 0 && <tr><td colSpan="6" className="muted" style={{ textAlign: 'center' }}>No settlements yet.</td></tr>}
-              {settlements.map((item) => {
+              {settlements.length === 0 && <tr><td colSpan="8" className="muted" style={{ textAlign: 'center' }}>No settlements yet.</td></tr>}
+              {settlements.map((item, i) => {
                 const eng = engagementOptions.find((e) => e.id === item.trainingRecordId);
                 const companyReceived = String(eng?.paymentStatus || '').toLowerCase() === 'paid';
                 const reason = item.status === 'Paid'
@@ -436,7 +485,9 @@ export default function TrainersSettlement() {
                     : 'Pending because company payment is pending';
                 return (
                   <tr key={item.id}>
+                    <td className="sno-cell">{i + 1}</td>
                     <td>{item.trainerName}</td>
+                    <td><span className="college-cell-badge">{item.collegeName || eng?.college || '—'}</span></td>
                     <td>{item.engagementLabel}</td>
                     <td>{item.status}</td>
                     <td>{fmt(item.amount)}</td>
@@ -457,28 +508,50 @@ export default function TrainersSettlement() {
         <h3 style={{ marginTop: 0 }}>30 / 45 Day Cycle Tracking</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.65rem', marginBottom: '0.8rem' }}>
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>Trainer</span><select className="form-control" value={agingTrainerFilter} onChange={(e) => setAgingTrainerFilter(e.target.value)}><option value="">All Trainers</option>{trainerNames.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+          <label><span className="muted" style={{ fontSize: '0.74rem' }}>College</span><select className="form-control" value={agingCollegeFilter} onChange={(e) => setAgingCollegeFilter(e.target.value)}><option value="">All Colleges</option>{agingCollegeOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+          <label><span className="muted" style={{ fontSize: '0.74rem' }}>Organization (Edtect)</span><select className="form-control" value={agingOrganizationFilter} onChange={(e) => setAgingOrganizationFilter(e.target.value)}><option value="">All Organizations</option>{agingOrganizationOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+          <label><span className="muted" style={{ fontSize: '0.74rem' }}>Org Payment Status</span><select className="form-control" value={agingOrgStatusFilter} onChange={(e) => setAgingOrgStatusFilter(e.target.value)}><option value="">All Org Status</option>{agingOrgStatusOptions.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
+          <label><span className="muted" style={{ fontSize: '0.74rem' }}>Trainer Settlement Status</span><select className="form-control" value={agingTrainerStatusFilter} onChange={(e) => setAgingTrainerStatusFilter(e.target.value)}><option value="">All Trainer Status</option>{agingTrainerStatusOptions.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>From Date</span><input className="form-control" type="date" value={agingFromDate} onChange={(e) => setAgingFromDate(e.target.value)} /></label>
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>To Date</span><input className="form-control" type="date" value={agingToDate} onChange={(e) => setAgingToDate(e.target.value)} /></label>
+          <label><span className="muted" style={{ fontSize: '0.74rem' }}>Sort By</span><select className="form-control" value={agingSortBy} onChange={(e) => setAgingSortBy(e.target.value)}><option value="age">Days Crossed</option><option value="college">College</option><option value="end_date">End Date</option><option value="org_status">Org Payment Status</option><option value="trainer_status">Trainer Settlement Status</option></select></label>
+          <label><span className="muted" style={{ fontSize: '0.74rem' }}>Sort Direction</span><select className="form-control" value={agingSortDir} onChange={(e) => setAgingSortDir(e.target.value)}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table className="ops-table" style={{ margin: 0 }}>
             <thead>
               <tr>
-                <th>Trainer</th><th>Engagement</th><th>End Date</th><th>Age (Days)</th><th>Indicator</th><th>Company Payment</th><th>Reason</th><th>Margin Left</th>
+                <th className="sno-th">#</th><th>Trainer</th><th>College</th><th>Engagement</th><th>End Date</th><th>Age (Days)</th><th>Indicator</th><th>Org Payment Status</th><th>Trainer Settlement Status</th><th>Paid from Company Pocket</th><th>Yet to Recover</th><th>Margin Left</th>
               </tr>
             </thead>
             <tbody>
-              {agingRows.length === 0 && <tr><td colSpan="8" className="muted" style={{ textAlign: 'center' }}>No engagements match filters.</td></tr>}
-              {agingRows.map((row) => (
+              {agingRows.length === 0 && <tr><td colSpan="12" className="muted" style={{ textAlign: 'center' }}>No engagements match filters.</td></tr>}
+              {agingRows.map((row, i) => (
                 <tr key={`aging-${row.id}`}>
+                  <td className="sno-cell">{i + 1}</td>
                   <td>{row.trainerName || '—'}</td>
+                  <td><span className="college-cell-badge">{row.college || '—'}</span></td>
                   <td>{row.label}</td>
                   <td>{fmtDate(row.endDate || row.startDate)}</td>
                   <td>{row.ageDays}</td>
                   <td>{row.indicator}</td>
-                  <td>{String(row.paymentStatus || '')}</td>
-                  <td>{row.reason}</td>
-                  <td>{fmt(row.marginLeft)}</td>
+                  <td>
+                    <span className={`status-pill ${row.orgPaymentStatus === 'Paid' ? 'received' : 'pending'}`}>
+                      {row.orgPaymentStatus}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`status-pill ${row.trainerSettlementStatus === 'Paid' ? 'received' : 'pending'}`}>
+                      {row.trainerSettlementStatus}
+                    </span>
+                  </td>
+                  <td style={{ color: row.companyPocketPaid > 0 ? '#dc2626' : '#6b7280', fontWeight: row.companyPocketPaid > 0 ? 700 : 400 }}>
+                    {row.companyPocketPaid > 0 ? `- ${fmt(row.companyPocketPaid)}` : '—'}
+                  </td>
+                  <td style={{ color: row.yetToRecover < 0 ? '#dc2626' : '#16a34a', fontWeight: row.yetToRecover !== 0 ? 700 : 400 }}>
+                    {row.yetToRecover !== 0 ? fmt(row.yetToRecover) : '—'}
+                  </td>
+                  <td style={{ color: row.marginLeft >= 0 ? '#16a34a' : '#dc2626', fontWeight: 600 }}>{fmt(row.marginLeft)}</td>
                 </tr>
               ))}
             </tbody>

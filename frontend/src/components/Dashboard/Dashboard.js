@@ -44,7 +44,7 @@ function parseAmount(row) {
   return { gross, tds, net };
 }
 
-function Dashboard() {
+function Dashboard({ user }) {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   const engagements = useMemo(
@@ -84,6 +84,14 @@ function Dashboard() {
     const overallSettlementPaid = settlements
       .filter((item) => item.status === 'Paid')
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+    const pendingSettlements = settlements.filter((item) => item.status !== 'Paid');
+    const pendingSettlementAmount = pendingSettlements.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const pendingSettlementCount = pendingSettlements.length;
+
+    const payerPendingRows = engagements.filter((row) => (row.paymentStatus || 'Invoiced').toLowerCase() !== 'paid');
+    const pendingRecoveryFromPayers = payerPendingRows.reduce((sum, row) => sum + parseAmount(row).net, 0);
+    const pendingRecoveryCount = payerPendingRows.length;
 
     const overallMarginAmount = totals.net - overallSettlementPaid;
     const overallMarginPercent = totals.net > 0 ? (overallMarginAmount / totals.net) * 100 : 0;
@@ -137,6 +145,8 @@ function Dashboard() {
       return {
         id: row.id,
         label: `${row.college || 'Unknown College'} - ${row.topic || row.notes || 'Training Engagement'}`,
+        college: row.college || 'Unknown College',
+        topic: row.topic || row.notes || 'Training Engagement',
         netRevenue: net,
         settlementPaid,
         marginAmount,
@@ -147,6 +157,10 @@ function Dashboard() {
     return {
       totals,
       overallSettlementPaid,
+      pendingSettlementAmount,
+      pendingSettlementCount,
+      pendingRecoveryFromPayers,
+      pendingRecoveryCount,
       overallMarginAmount,
       overallMarginPercent,
       engagementMargins,
@@ -163,6 +177,28 @@ function Dashboard() {
         <p>Overall TDS, overall revenue, in-hand revenue, counts, and month/year analysis.</p>
       </div>
 
+      {user?.role === 'superadmin' && (
+        <div style={{
+          background: 'linear-gradient(90deg, #7c3aed 0%, #6366f1 100%)',
+          color: '#fff',
+          borderRadius: '10px',
+          padding: '14px 20px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+          flexWrap: 'wrap'
+        }}>
+          <span style={{ fontWeight: 700, fontSize: '14px' }}>SuperAdmin Access</span>
+          <a href="/financial" style={{ color: '#e0d9ff', fontSize: '13px', textDecoration: 'underline' }}>
+            Financial Reports
+          </a>
+          <a href="/employees" style={{ color: '#e0d9ff', fontSize: '13px', textDecoration: 'underline' }}>
+            Manage Employees
+          </a>
+        </div>
+      )}
+
       <div className="summary-cards dashboard-summary-grid">
         <div className="ops-card summary-card teaching-stat-card accent-green">
           <div className="stat-value">{inr(analytics.totals.gross)}</div>
@@ -176,18 +212,36 @@ function Dashboard() {
           <div className="stat-value">{inr(analytics.totals.net)}</div>
           <div className="stat-label">In-hand Revenue</div>
         </div>
-        <div className="ops-card summary-card teaching-stat-card accent-blue">
-          <div className="stat-value">{inr(analytics.overallSettlementPaid)}</div>
-          <div className="stat-label">Trainer Settlement (Paid)</div>
+        {user?.role === 'superadmin' && (
+          <div className="ops-card summary-card teaching-stat-card accent-blue">
+            <div className="stat-value">{inr(analytics.overallSettlementPaid)}</div>
+            <div className="stat-label">Trainer Settlement (Paid)</div>
+          </div>
+        )}
+        {user?.role === 'superadmin' && (
+          <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#d97706' }}>
+            <div className="stat-value" style={{ color: '#d97706' }}>{inr(analytics.pendingSettlementAmount)}</div>
+            <div className="stat-label">Pending Settlements</div>
+            <div className="muted" style={{ marginTop: 6, fontSize: '0.75rem' }}>{analytics.pendingSettlementCount} open item(s)</div>
+          </div>
+        )}
+        <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#dc2626' }}>
+          <div className="stat-value" style={{ color: '#dc2626' }}>{inr(analytics.pendingRecoveryFromPayers)}</div>
+          <div className="stat-label">Pending Recovery from Payers</div>
+          <div className="muted" style={{ marginTop: 6, fontSize: '0.75rem' }}>{analytics.pendingRecoveryCount} engagement(s) unpaid</div>
         </div>
-        <div className="ops-card summary-card teaching-stat-card accent-green">
-          <div className="stat-value">{inr(analytics.overallMarginAmount)}</div>
-          <div className="stat-label">Company Margin</div>
-        </div>
-        <div className="ops-card summary-card teaching-stat-card">
-          <div className="stat-value">{analytics.overallMarginPercent.toFixed(2)}%</div>
-          <div className="stat-label">Margin %</div>
-        </div>
+        {user?.role === 'superadmin' && (
+          <div className="ops-card summary-card teaching-stat-card accent-green">
+            <div className="stat-value">{inr(analytics.overallMarginAmount)}</div>
+            <div className="stat-label">Company Margin</div>
+          </div>
+        )}
+        {user?.role === 'superadmin' && (
+          <div className="ops-card summary-card teaching-stat-card">
+            <div className="stat-value">{analytics.overallMarginPercent.toFixed(2)}%</div>
+            <div className="stat-label">Margin %</div>
+          </div>
+        )}
         <div className="ops-card summary-card teaching-stat-card">
           <div className="stat-value">{engagements.length}</div>
           <div className="stat-label">No. of Engagements</div>
@@ -243,6 +297,7 @@ function Dashboard() {
               <table className="ops-table">
                 <thead>
                   <tr>
+                    <th className="sno-th">#</th>
                     <th>Year</th>
                     <th>Engagements</th>
                     <th>Gross Revenue</th>
@@ -251,8 +306,9 @@ function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {analytics.yearlyRows.map((row) => (
+                  {analytics.yearlyRows.map((row, i) => (
                     <tr key={row.year}>
+                      <td className="sno-cell">{i + 1}</td>
                       <td>{row.year}</td>
                       <td>{row.count}</td>
                       <td>{inr(row.gross)}</td>
@@ -267,6 +323,7 @@ function Dashboard() {
         </article>
       </div>
 
+      {user?.role === 'superadmin' && (
       <article className="ops-card" style={{ marginTop: '1.2rem' }}>
         <h3>Engagement Margin Analysis</h3>
         {analytics.engagementMargins.length === 0 ? (
@@ -276,7 +333,9 @@ function Dashboard() {
             <table className="ops-table">
               <thead>
                 <tr>
-                  <th>Engagement</th>
+                  <th className="sno-th">#</th>
+                  <th>College</th>
+                  <th>Topic</th>
                   <th>In-hand Revenue</th>
                   <th>Trainer Settlement (Paid)</th>
                   <th>Margin Amount</th>
@@ -284,9 +343,11 @@ function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {analytics.engagementMargins.map((row) => (
+                {analytics.engagementMargins.map((row, i) => (
                   <tr key={row.id}>
-                    <td>{row.label}</td>
+                    <td className="sno-cell">{i + 1}</td>
+                    <td><span className="college-cell-badge">{row.college}</span></td>
+                    <td>{row.topic}</td>
                     <td>{inr(row.netRevenue)}</td>
                     <td>{inr(row.settlementPaid)}</td>
                     <td><strong>{inr(row.marginAmount)}</strong></td>
@@ -298,6 +359,7 @@ function Dashboard() {
           </div>
         )}
       </article>
+      )}
     </section>
   );
 }

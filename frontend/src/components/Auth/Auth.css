@@ -17,8 +17,39 @@
 
 .auth-card h2 {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 24px;
   color: #333;
+}
+
+.auth-mode-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 24px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 8px 0;
+  background: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  transition: background 0.15s, color 0.15s;
+}
+
+.auth-tab.active {
+  background: #667eea;
+  color: #fff;
+  font-weight: 600;
+}
+
+.auth-tab:not(:last-child) {
+  border-right: 1px solid #d1d5db;
 }
 
 .btn-block {
@@ -40,4 +71,19 @@
 
 .auth-link a:hover {
   text-decoration: underline;
+}
+
+.info {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+select.form-control {
+  appearance: auto;
+  cursor: pointer;
 }

@@ -19,27 +19,39 @@ import Organizations from './components/Organizations/Organizations';
 import Trainers from './components/Trainers/Trainers';
 import Topics from './components/Topics/Topics';
 import TrainersSettlement from './components/TrainersSettlement/TrainersSettlement';
+import FinancialDashboard from './components/Dashboard/FinancialDashboard';
+import EmployeeManager from './components/Admin/EmployeeManager';
+import ProtectedRoute from './components/Auth/ProtectedRoute';
+import { authAPI } from './services/api';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token) {
+    const savedUser = localStorage.getItem('user');
+    if (token && savedUser) {
       setIsAuthenticated(true);
+      setUser(JSON.parse(savedUser));
     }
     setLoading(false);
   }, []);
 
-  const handleLogin = (token) => {
+  const handleLogin = (token, userData) => {
     localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(userData));
     setIsAuthenticated(true);
+    setUser(userData);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await authAPI.logout(); } catch (_) {}
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setIsAuthenticated(false);
+    setUser(null);
   };
 
   if (loading) {
@@ -50,25 +62,32 @@ function App() {
     <Router>
       <div className="App">
         <Routes>
-          <Route 
-            path="/login" 
-            element={!isAuthenticated ? <Login onLogin={handleLogin} /> : <Navigate to="/dashboard" />} 
+          <Route
+            path="/login"
+            element={!isAuthenticated ? <Login onLogin={handleLogin} /> : <Navigate to="/dashboard" />}
           />
-          <Route 
-            path="/register" 
-            element={!isAuthenticated ? <Register onLogin={handleLogin} /> : <Navigate to="/dashboard" />} 
+          <Route
+            path="/register"
+            element={!isAuthenticated ? <Register onLogin={handleLogin} /> : <Navigate to="/dashboard" />}
           />
           <Route
             path="/"
-            element={isAuthenticated ? <AppShell onLogout={handleLogout} /> : <Navigate to="/login" />}
+            element={isAuthenticated ? <AppShell user={user} onLogout={handleLogout} /> : <Navigate to="/login" />}
           >
             <Route index element={<Navigate to="/dashboard" />} />
-            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="dashboard" element={<Dashboard user={user} />} />
             <Route path="calendar" element={<CalendarHub />} />
             <Route path="finance" element={<Payments />} />
             <Route path="trainer-settlements" element={<TrainersSettlement />} />
             <Route path="expenses" element={<ExpenseList />} />
-            <Route path="insights" element={<Insights />} />
+            <Route
+              path="insights"
+              element={
+                <ProtectedRoute user={user} requiredRole="superadmin">
+                  <Insights />
+                </ProtectedRoute>
+              }
+            />
             <Route path="profile" element={<Profile />} />
             <Route path="add-expense" element={<AddExpense />} />
             <Route path="upload-receipt" element={<UploadReceipt />} />
@@ -84,22 +103,29 @@ function App() {
               path="vendor"
               element={<Navigate to="/training-engagements" replace />}
             />
+            <Route path="trainers" element={<Trainers />} />
+            <Route path="colleges" element={<Colleges />} />
+            <Route path="topics" element={<Topics />} />
+            <Route path="organizations" element={<Organizations />} />
+
+            {/* SuperAdmin-only routes */}
             <Route
-              path="trainers"
-              element={<Trainers />}
+              path="financial"
+              element={
+                <ProtectedRoute user={user} requiredRole="superadmin">
+                  <FinancialDashboard />
+                </ProtectedRoute>
+              }
             />
             <Route
-              path="colleges"
-              element={<Colleges />}
+              path="employees"
+              element={
+                <ProtectedRoute user={user} requiredRole="superadmin">
+                  <EmployeeManager />
+                </ProtectedRoute>
+              }
             />
-            <Route
-              path="topics"
-              element={<Topics />}
-            />
-            <Route
-              path="organizations"
-              element={<Organizations />}
-            />
+
             <Route
               path="settings"
               element={<PlaceholderModule title="Settings" description="Prepare role-based configuration and automation defaults." />}

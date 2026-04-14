@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: 'home' },
   { to: '/calendar', label: 'Calendar', icon: 'calendar' },
   { to: '/finance', label: 'Payments', icon: 'payments' },
@@ -11,9 +11,14 @@ const NAV_ITEMS = [
   { to: '/topics', label: 'Topics', icon: 'topic' },
   { to: '/colleges', label: 'Colleges', icon: 'college' },
   { to: '/organizations', label: 'Organizations', icon: 'organization' },
-  { to: '/insights', label: 'Insights', icon: 'insights' },
   { to: '/profile', label: 'Profile', icon: 'profile' },
   { to: '/settings', label: 'Settings', icon: 'settings' }
+];
+
+const SUPERADMIN_NAV_ITEMS = [
+  { to: '/insights', label: 'Insights', icon: 'insights' },
+  { to: '/financial', label: 'Financial Reports', icon: 'financial' },
+  { to: '/employees', label: 'Employees', icon: 'employees' }
 ];
 
 function Icon({ name }) {
@@ -110,6 +115,20 @@ function Icon({ name }) {
       </svg>
     );
   }
+  if (name === 'financial') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
+      </svg>
+    );
+  }
+  if (name === 'employees') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+      </svg>
+    );
+  }
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-5 9h10v2H7v-2Z" />
@@ -117,8 +136,12 @@ function Icon({ name }) {
   );
 }
 
-function AppShell({ onLogout }) {
+function AppShell({ user, onLogout }) {
   const navigate = useNavigate();
+  const isSuperAdmin = user?.role === 'superadmin';
+  const navItems = isSuperAdmin
+    ? [...BASE_NAV_ITEMS, ...SUPERADMIN_NAV_ITEMS]
+    : BASE_NAV_ITEMS;
 
   return (
     <div className="ops-shell">
@@ -131,8 +154,23 @@ function AppShell({ onLogout }) {
           </div>
         </div>
 
+        {isSuperAdmin && (
+          <div style={{ padding: '4px 16px', marginBottom: '8px' }}>
+            <span style={{
+              display: 'inline-block',
+              background: '#7c3aed',
+              color: '#fff',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              padding: '2px 8px',
+              letterSpacing: '0.05em'
+            }}>SUPER ADMIN</span>
+          </div>
+        )}
+
         <nav className="ops-nav" aria-label="Primary">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -147,6 +185,9 @@ function AppShell({ onLogout }) {
         </nav>
 
         <div className="ops-sidebar-footer">
+          <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>
+            {user?.name} &bull; {user?.role}
+          </div>
           <button className="btn btn-danger" onClick={onLogout}>Logout</button>
         </div>
       </aside>

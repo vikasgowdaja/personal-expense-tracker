@@ -27,7 +27,12 @@ api.interceptors.request.use(
 // Auth API
 export const authAPI = {
   register: (userData) => api.post('/auth/register', userData),
+  verifyEmail: (data) => api.post('/auth/verify-email', data),
   login: (userData) => api.post('/auth/login', userData),
+  requestOTP: (data) => api.post('/auth/request-otp', data),
+  loginOTP: (data) => api.post('/auth/login-otp', data),
+  refresh: (data) => api.post('/auth/refresh', data),
+  logout: () => api.post('/auth/logout'),
   getUser: () => api.get('/auth/user')
 };
 
@@ -106,6 +111,21 @@ export const paymentDetailsAPI = {
   getAll: () => api.get('/payment-details'),
   upsert: (data) => api.post('/payment-details', data),
   delete: (id) => api.delete(`/payment-details/${id}`)
+};
+
+// SuperAdmin-only APIs
+export const financialAPI = {
+  getSummary: () => api.get('/financial/summary'),
+  getPayouts: () => api.get('/financial/payouts'),
+  getMargins: () => api.get('/financial/margins')
+};
+
+export const employeeAPI = {
+  getAll: () => api.get('/employees'),
+  create: (data) => api.post('/employees', data),
+  update: (id, data) => api.put(`/employees/${id}`, data),
+  promoteRole: (id, role) => api.patch(`/employees/${id}/role`, { role }),
+  remove: (id) => api.delete(`/employees/${id}`)
 };
 
 export default api;

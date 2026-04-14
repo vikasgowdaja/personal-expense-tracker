@@ -1,4 +1,4 @@
-# Personal Expense Tracker - MERN Stack
+# Personal Ops Intelligence - MERN Stack
 
 ## Project Setup Checklist
 
@@ -10,4 +10,4 @@
 - [ ] Setup Complete
 
 ## Project Overview
-Personal Expense Tracker built with MongoDB, Express, React, and Node.js.
+Personal Ops Intelligence system built with MongoDB, Express, React, and Node.js. A voice-first personal operations platform for daily schedule classification, income tracking, teaching logs, vendor operations, payment timelines, and dashboard analytics.
