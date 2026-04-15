@@ -119,6 +119,30 @@ function FinancialDashboard() {
 
   const { totalBilled, trainersPaid, pendingAmount, grossMargin, marginPercent, pendingFromOrgs } = metrics;
 
+  // ── Per-employee breakdown ────────────────────────────────────────────────
+  const employeeRows = useMemo(() => {
+    const map = {};
+    engagements.forEach(e => {
+      const key = e.sourcedBy || '__unassigned__';
+      const name = e.sourcedByName || (e.sourcedBy ? e.sourcedBy : 'Unassigned');
+      if (!map[key]) map[key] = { employeeId: e.sourcedBy || '', name, count: 0, revenue: 0, trainerCost: 0, paid: 0, pending: 0 };
+      const net = parseEngagementNet(e);
+      const trainerCost = settlements
+        .filter(s => s.trainingRecordId === e.id || s.engagementId === e.id)
+        .reduce((sum, s) => sum + Number(s.amount || 0), 0);
+      map[key].count += 1;
+      map[key].revenue += net;
+      map[key].trainerCost += trainerCost;
+      if ((e.paymentStatus || '').toLowerCase() === 'paid') map[key].paid += net;
+      else map[key].pending += net;
+    });
+    return Object.values(map).sort((a, b) => b.revenue - a.revenue).map(r => ({
+      ...r,
+      margin: r.revenue - r.trainerCost,
+      marginPct: r.revenue > 0 ? ((r.revenue - r.trainerCost) / r.revenue * 100).toFixed(1) : '0.0'
+    }));
+  }, [engagements, settlements]);
+
   return (
     <div style={{ padding: '24px', maxWidth: '1100px' }}>
       <h2 style={{ marginBottom: '4px' }}>Financial Reports</h2>
@@ -138,7 +162,7 @@ function FinancialDashboard() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-        {['summary', 'payouts', 'margins'].map(tab => (
+        {['summary', 'payouts', 'margins', 'employees'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -153,7 +177,7 @@ function FinancialDashboard() {
               textTransform: 'capitalize'
             }}
           >
-            {tab}
+            {tab === 'employees' ? 'By Employee' : tab}
           </button>
         ))}
       </div>
@@ -230,6 +254,49 @@ function FinancialDashboard() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Per-employee breakdown tab */}
+      {activeTab === 'employees' && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+            <thead>
+              <tr style={{ background: '#f9fafb' }}>
+                {['Employee ID', 'Name', 'Engagements', 'Total Billed', 'Trainer Cost', 'Gross Margin', 'Margin %', 'Paid by Org', 'Pending'].map(h => (
+                  <th key={h} style={{ padding: '10px 12px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {employeeRows.map((r, i) => (
+                <tr key={r.employeeId || i} style={{ borderBottom: '1px solid #f3f4f6', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                  <td style={{ padding: '10px 12px' }}>
+                    {r.employeeId
+                      ? <span style={{ fontWeight: 700, color: '#7c3aed', background: '#ede9fe', borderRadius: 4, padding: '2px 8px' }}>{r.employeeId}</span>
+                      : <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Unassigned</span>
+                    }
+                  </td>
+                  <td style={{ padding: '10px 12px', fontWeight: 600 }}>{r.name}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>{r.count}</td>
+                  <td style={{ padding: '10px 12px', color: '#0ea5e9', fontWeight: 600 }}>{fmt(r.revenue)}</td>
+                  <td style={{ padding: '10px 12px', color: '#f59e0b' }}>{fmt(r.trainerCost)}</td>
+                  <td style={{ padding: '10px 12px', color: r.margin >= 0 ? '#10b981' : '#ef4444', fontWeight: 700 }}>{fmt(r.margin)}</td>
+                  <td style={{ padding: '10px 12px', color: '#7c3aed', fontWeight: 600 }}>{r.marginPct}%</td>
+                  <td style={{ padding: '10px 12px', color: '#16a34a' }}>{fmt(r.paid)}</td>
+                  <td style={{ padding: '10px 12px', color: '#dc2626' }}>{fmt(r.pending)}</td>
+                </tr>
+              ))}
+              {employeeRows.length === 0 && (
+                <tr><td colSpan={9} style={{ padding: '24px', textAlign: 'center', color: '#9ca3af' }}>No engagements with employee assignment found.</td></tr>
+              )}
+            </tbody>
+          </table>
+          {employeeRows.length > 0 && (
+            <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: 12 }}>
+              Engagements without a "Sourced By" employee are grouped under Unassigned.
+            </p>
+          )}
         </div>
       )}
     </div>

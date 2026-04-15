@@ -14,6 +14,12 @@ function generateOTP() {
   return crypto.randomInt(100000, 999999).toString();
 }
 
+async function generateEmployeeId(name) {
+  const prefix = name.replace(/\s+/g, '').substring(0, 3).toUpperCase();
+  const count = await User.countDocuments({ employeeId: { $regex: `^${prefix}` } });
+  return `${prefix}${String(count + 1).padStart(3, '0')}`;
+}
+
 function issueTokens(user) {
   const payload = { user: { id: user.id, role: user.role } };
   const accessToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "15m" });
@@ -41,12 +47,14 @@ router.post("/register", [
     const salt = await bcrypt.genSalt(12);
     const hashedPassword = await bcrypt.hash(password, salt);
     const hashedOTP = await bcrypt.hash(otp, 10);
+    const employeeId = await generateEmployeeId(name);
 
     user = new User({
       name,
       email,
       password: hashedPassword,
       role: 'employee',
+      employeeId,
       otp: hashedOTP,
       otpExpires: new Date(Date.now() + 10 * 60 * 1000),
       isVerified: false
@@ -93,7 +101,7 @@ router.post("/verify-email", [
     res.json({
       token: accessToken,
       refreshToken,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, employeeId: user.employeeId }
     });
   } catch (err) {
     console.error(err.message);
@@ -129,7 +137,7 @@ router.post("/login", [
     res.json({
       token: accessToken,
       refreshToken,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, employeeId: user.employeeId }
     });
   } catch (err) {
     console.error(err.message);
@@ -195,7 +203,7 @@ router.post("/login-otp", [
     res.json({
       token: accessToken,
       refreshToken,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, employeeId: user.employeeId }
     });
   } catch (err) {
     console.error(err.message);

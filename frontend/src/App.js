@@ -4,6 +4,7 @@ import './App.css';
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
 import Dashboard from './components/Dashboard/Dashboard';
+import EmployeeDashboard from './components/Dashboard/EmployeeDashboard';
 import ExpenseList from './components/Expenses/ExpenseList';
 import AddExpense from './components/Expenses/AddExpense';
 import UploadReceipt from './components/Expenses/UploadReceipt';
@@ -75,7 +76,10 @@ function App() {
             element={isAuthenticated ? <AppShell user={user} onLogout={handleLogout} /> : <Navigate to="/login" />}
           >
             <Route index element={<Navigate to="/dashboard" />} />
-            <Route path="dashboard" element={<Dashboard user={user} />} />
+            <Route
+              path="dashboard"
+              element={user?.role === 'superadmin' ? <Dashboard user={user} /> : <EmployeeDashboard user={user} />}
+            />
             <Route path="calendar" element={<CalendarHub />} />
             <Route path="finance" element={<Payments />} />
             <Route path="trainer-settlements" element={<TrainersSettlement />} />
@@ -97,7 +101,7 @@ function App() {
             />
             <Route
               path="training-engagements"
-              element={<TrainingEngagementsHub />}
+              element={<TrainingEngagementsHub user={user} />}
             />
             <Route
               path="vendor"

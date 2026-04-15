@@ -198,7 +198,7 @@ function UserTable({ users, onEdit, onPromote, onDelete }) {
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
       <thead>
         <tr style={{ background: '#f9fafb' }}>
-          {['Name', 'Email', 'Role', 'Verified', 'Created', 'Actions'].map(h => (
+          {['Employee ID', 'Name', 'Email', 'Role', 'Verified', 'Created', 'Actions'].map(h => (
             <th key={h} style={{ padding: '10px 12px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>{h}</th>
           ))}
         </tr>
@@ -206,6 +206,12 @@ function UserTable({ users, onEdit, onPromote, onDelete }) {
       <tbody>
         {users.map(u => (
           <tr key={u._id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+            <td style={{ padding: '10px 12px' }}>
+              {u.employeeId
+                ? <span style={{ fontWeight: 700, color: '#7c3aed', background: '#ede9fe', borderRadius: 4, padding: '2px 8px', fontSize: '13px' }}>{u.employeeId}</span>
+                : <span style={{ color: '#9ca3af', fontSize: '12px' }}>—</span>
+              }
+            </td>
             <td style={{ padding: '10px 12px', fontWeight: 600 }}>{u.name}</td>
             <td style={{ padding: '10px 12px', color: '#6b7280' }}>{u.email}</td>
             <td style={{ padding: '10px 12px' }}><RoleBadge role={u.role} /></td>
@@ -250,7 +256,7 @@ function UserTable({ users, onEdit, onPromote, onDelete }) {
           </tr>
         ))}
         {users.length === 0 && (
-          <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#9ca3af' }}>None yet.</td></tr>
+          <tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#9ca3af' }}>None yet.</td></tr>
         )}
       </tbody>
     </table>

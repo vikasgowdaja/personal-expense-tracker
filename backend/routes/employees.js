@@ -8,6 +8,12 @@ const User = require('../models/User');
 // All routes: authenticated + superadmin only
 router.use(requireAuth, requireRole('superadmin'));
 
+async function generateEmployeeId(name) {
+  const prefix = name.replace(/\s+/g, '').substring(0, 3).toUpperCase();
+  const count = await User.countDocuments({ employeeId: { $regex: `^${prefix}` } });
+  return `${prefix}${String(count + 1).padStart(3, '0')}`;
+}
+
 /**
  * GET /api/employees
  * List all users (employees + admins) for management.
@@ -44,12 +50,14 @@ router.post('/', [
 
     const salt = await bcrypt.genSalt(12);
     const hashedPassword = await bcrypt.hash(password, salt);
+    const employeeId = await generateEmployeeId(name);
 
     const employee = new User({
       name,
       email,
       password: hashedPassword,
       role: 'employee',
+      employeeId,
       isVerified: true   // superadmin-created accounts are pre-verified
     });
     await employee.save();

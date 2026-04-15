@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { clientAPI, institutionAPI, topicAPI } from '../../services/api';
+import { clientAPI, employeeAPI, institutionAPI, topicAPI } from '../../services/api';
 
 const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -44,7 +44,9 @@ const EMPTY_FORM = {
   ratePerDay: '',
   notes: '',
   tdsApplicable: true,
-  paymentStatus: 'Invoiced'
+  paymentStatus: 'Invoiced',
+  sourcedBy: '',
+  sourcedByName: ''
 };
 
 function normalizeDateList(dateList) {
@@ -137,11 +139,18 @@ function getNetAmount(row) {
   return getGrossAmount(row) - getTdsAmount(row);
 }
 
-function TrainingEngagementsHub() {
+function TrainingEngagementsHub({ user }) {
   const [engagements, setEngagements] = useState(() =>
     JSON.parse(localStorage.getItem('training_engagements') || '[]')
   );
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(() => {
+    const base = { ...EMPTY_FORM };
+    if (user?.employeeId) {
+      base.sourcedBy = user.employeeId;
+      base.sourcedByName = user.name || '';
+    }
+    return base;
+  });
   const [editId, setEditId] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
   const [pickerMonth, setPickerMonth] = useState(() => {
@@ -153,6 +162,7 @@ function TrainingEngagementsHub() {
   const [collegeOptions, setCollegeOptions] = useState([]);
   const [organizationOptions, setOrganizationOptions] = useState([]);
   const [trainerOptions, setTrainerOptions] = useState([]);
+  const [employeeOptions, setEmployeeOptions] = useState([]);
 
   const [filterCollege, setFilterCollege] = useState('');
   const [filterOrganization, setFilterOrganization] = useState('');
@@ -192,6 +202,14 @@ function TrainingEngagementsHub() {
       setTopicOptions([...new Set([...topics, ...savedTopics])]);
       setCollegeOptions([...new Set([...institutions, ...savedColleges])]);
       setOrganizationOptions([...new Set([...clients, ...savedOrganizations])]);
+
+      // Load employee list for sourcedBy dropdown (superadmin only, fails gracefully for employees)
+      try {
+        const empRes = await employeeAPI.getAll();
+        setEmployeeOptions(empRes.data || []);
+      } catch {
+        setEmployeeOptions([]);
+      }
     } catch {
       const savedRows = JSON.parse(localStorage.getItem('training_engagements') || '[]');
       setTopicOptions([
@@ -313,6 +331,8 @@ function TrainingEngagementsHub() {
       totalAmount: netAmount,
       notes: form.notes,
       paymentStatus: form.paymentStatus,
+      sourcedBy: form.sourcedBy || '',
+      sourcedByName: form.sourcedByName || '',
       createdAt: editId
         ? engagements.find((x) => x.id === editId)?.createdAt || new Date().toISOString()
         : new Date().toISOString()
@@ -333,7 +353,12 @@ function TrainingEngagementsHub() {
       setOrganizationOptions((prev) => [resolvedOrg, ...prev]);
     }
 
-    setForm(EMPTY_FORM);
+    const base = { ...EMPTY_FORM };
+    if (user?.employeeId) {
+      base.sourcedBy = user.employeeId;
+      base.sourcedByName = user.name || '';
+    }
+    setForm(base);
     setEditId('');
   };
 
@@ -362,7 +387,9 @@ function TrainingEngagementsHub() {
       ratePerDay: String(row.ratePerDay || ''),
       notes: row.notes || '',
       tdsApplicable: row.tdsApplicable !== false,
-      paymentStatus: row.paymentStatus || 'Invoiced'
+      paymentStatus: row.paymentStatus || 'Invoiced',
+      sourcedBy: row.sourcedBy || '',
+      sourcedByName: row.sourcedByName || ''
     });
 
     const pivotDate = row.startDate || row.selectedDates?.[0] || TODAY_KEY;
@@ -381,7 +408,12 @@ function TrainingEngagementsHub() {
 
   const handleCancel = () => {
     setEditId('');
-    setForm(EMPTY_FORM);
+    const base = { ...EMPTY_FORM };
+    if (user?.employeeId) {
+      base.sourcedBy = user.employeeId;
+      base.sourcedByName = user.name || '';
+    }
+    setForm(base);
     const now = new Date();
     setPickerMonth(new Date(now.getFullYear(), now.getMonth(), 1));
   };
@@ -610,6 +642,41 @@ function TrainingEngagementsHub() {
                   <option value="Paid">Paid</option>
                 </select>
               </div>
+
+              <div className="form-group">
+                <label>Sourced By (Employee)</label>
+                {employeeOptions.length > 0 ? (
+                  <select
+                    className="form-control"
+                    value={form.sourcedBy}
+                    onChange={(e) => {
+                      const emp = employeeOptions.find(x => x.employeeId === e.target.value);
+                      handleField('sourcedBy', e.target.value);
+                      handleField('sourcedByName', emp ? emp.name : '');
+                    }}
+                  >
+                    <option value="">-- Unassigned --</option>
+                    {employeeOptions.map((emp) => (
+                      <option key={emp._id} value={emp.employeeId || emp._id}>
+                        {emp.employeeId ? `${emp.employeeId} — ${emp.name}` : emp.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className="form-control"
+                    placeholder={user?.employeeId ? `${user.employeeId} (you)` : 'Employee ID (e.g. VIK001)'}
+                    value={form.sourcedBy}
+                    onChange={(e) => handleField('sourcedBy', e.target.value)}
+                    readOnly={!!user?.employeeId}
+                  />
+                )}
+                {form.sourcedByName && (
+                  <span style={{ fontSize: '0.78rem', color: 'var(--ops-text-secondary)', marginTop: '4px', display: 'block' }}>
+                    {form.sourcedByName}
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="form-group">
@@ -672,6 +739,7 @@ function TrainingEngagementsHub() {
                     <th>Trainer</th>
                     <th>College</th>
                     <th>Organization</th>
+                    <th>Sourced By</th>
                     <th>Date Range</th>
                     <th>Days</th>
                     <th>Hours/Day</th>
@@ -691,6 +759,11 @@ function TrainingEngagementsHub() {
                       <td>{x.trainerName || '—'}</td>
                       <td><span className="college-cell-badge">{x.college}</span></td>
                       <td>{x.organization}</td>
+                      <td style={{ whiteSpace: 'nowrap', fontSize: '0.82rem' }}>
+                        {x.sourcedBy ? (
+                          <span title={x.sourcedByName || ''} style={{ fontWeight: 600, color: '#7c3aed' }}>{x.sourcedBy}</span>
+                        ) : '—'}
+                      </td>
                       <td style={{ whiteSpace: 'nowrap' }}>{formatDateSummary(x)}</td>
                       <td>{x.totalDays}</td>
                       <td>{x.dailyHours || '—'}</td>
