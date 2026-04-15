@@ -27,21 +27,71 @@ function issueTokens(user) {
   return { accessToken, refreshToken };
 }
 
+function buildAuthUserResponse(user) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    adminCode: user.role === 'superadmin' ? (user.adminCode || '') : '',
+    employeeId: user.employeeId,
+    defaultConnectionId: user.defaultConnectionId || '',
+    connections: (user.connections || []).map((c) => ({
+      superadminId: String(c.superadminId),
+      connectionId: c.connectionId,
+      isActive: c.isActive !== false
+    }))
+  };
+}
+
+async function generateAdminCode() {
+  for (let i = 0; i < 10; i += 1) {
+    const candidate = `ADM-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+    const exists = await User.exists({ adminCode: candidate });
+    if (!exists) return candidate;
+  }
+  return `ADM-${Date.now().toString(36).toUpperCase()}`;
+}
+
+async function ensureSuperadminAdminCode(user) {
+  if (!user || user.role !== 'superadmin') return;
+  if (user.adminCode) return;
+  const code = await generateAdminCode();
+  await User.updateOne(
+    { _id: user._id, $or: [{ adminCode: '' }, { adminCode: null }, { adminCode: { $exists: false } }] },
+    { $set: { adminCode: code } }
+  );
+  user.adminCode = code;
+}
+
+function generateConnectionId() {
+  return `CNX-${Math.random().toString(36).slice(2, 8).toUpperCase()}-${Date.now().toString(36).slice(-4).toUpperCase()}`;
+}
+
 // ─── REGISTER (email + password) ─────────────────────────────────────────────
 
 router.post("/register", [
   body("name", "Name is required").not().isEmpty(),
   body("email", "Please include a valid email").isEmail(),
-  body("password", "Password must be at least 8 characters").isLength({ min: 8 })
+  body("password", "Password must be at least 8 characters").isLength({ min: 8 }),
+  body("adminCode", "Superadmin admin code is required").not().isEmpty()
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-  const { name, email, password } = req.body;
+  const { name, email, password, adminCode } = req.body;
 
   try {
     let user = await User.findOne({ email });
     if (user) return res.status(400).json({ message: "User already exists" });
+
+    const normalizedCode = String(adminCode || '').trim().toUpperCase();
+    const superadmin = await User.findOne({ role: 'superadmin', adminCode: normalizedCode });
+    if (!superadmin) {
+      return res.status(400).json({ message: 'Invalid admin code. Please get a valid code from your SuperAdmin.' });
+    }
+
+    await ensureSuperadminAdminCode(superadmin);
 
     const otp = generateOTP();
     const salt = await bcrypt.genSalt(12);
@@ -55,10 +105,19 @@ router.post("/register", [
       password: hashedPassword,
       role: 'employee',
       employeeId,
+      defaultConnectionId: '',
+      connections: [
+        {
+          superadminId: superadmin._id,
+          connectionId: generateConnectionId(),
+          isActive: true
+        }
+      ],
       otp: hashedOTP,
       otpExpires: new Date(Date.now() + 10 * 60 * 1000),
       isVerified: false
     });
+    user.defaultConnectionId = user.connections[0].connectionId;
     await user.save();
 
     await sendOTPEmail(email, otp);
@@ -101,7 +160,7 @@ router.post("/verify-email", [
     res.json({
       token: accessToken,
       refreshToken,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role, employeeId: user.employeeId }
+      user: buildAuthUserResponse(user)
     });
   } catch (err) {
     console.error(err.message);
@@ -123,6 +182,8 @@ router.post("/login", [
     const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ message: "Invalid credentials" });
 
+    await ensureSuperadminAdminCode(user);
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
@@ -137,7 +198,7 @@ router.post("/login", [
     res.json({
       token: accessToken,
       refreshToken,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role, employeeId: user.employeeId }
+      user: buildAuthUserResponse(user)
     });
   } catch (err) {
     console.error(err.message);
@@ -187,6 +248,8 @@ router.post("/login-otp", [
   try {
     const user = await User.findOne({ email });
     if (!user || !user.isVerified) return res.status(400).json({ message: "Invalid OTP or account" });
+
+    await ensureSuperadminAdminCode(user);
     if (!user.otp || !user.otpExpires || user.otpExpires < new Date()) {
       return res.status(400).json({ message: "OTP expired. Request a new one." });
     }
@@ -203,7 +266,7 @@ router.post("/login-otp", [
     res.json({
       token: accessToken,
       refreshToken,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role, employeeId: user.employeeId }
+      user: buildAuthUserResponse(user)
     });
   } catch (err) {
     console.error(err.message);
@@ -255,6 +318,7 @@ router.post("/logout", auth, async (req, res) => {
 router.get("/user", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password -otp -otpExpires -refreshToken");
+    await ensureSuperadminAdminCode(user);
     res.json(user);
   } catch (err) {
     console.error(err.message);

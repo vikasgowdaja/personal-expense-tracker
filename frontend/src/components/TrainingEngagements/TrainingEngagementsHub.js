@@ -45,6 +45,7 @@ const EMPTY_FORM = {
   notes: '',
   tdsApplicable: true,
   paymentStatus: 'Invoiced',
+  connectionId: '',
   sourcedBy: '',
   sourcedByName: ''
 };
@@ -139,6 +140,23 @@ function getNetAmount(row) {
   return getGrossAmount(row) - getTdsAmount(row);
 }
 
+function getUserDefaultConnection(user) {
+  if (!user) return '';
+  if (user.defaultConnectionId) return user.defaultConnectionId;
+  const activeConnections = (user.connections || []).filter((c) => c.isActive !== false);
+  return activeConnections[0]?.connectionId || '';
+}
+
+function getEmployeeConnectionContext(user, selectedConnectionId) {
+  const activeConnections = (user?.connections || []).filter((c) => c.isActive !== false);
+  if (!activeConnections.length) return null;
+  if (selectedConnectionId) {
+    const match = activeConnections.find((c) => c.connectionId === selectedConnectionId);
+    if (match) return match;
+  }
+  return activeConnections[0];
+}
+
 function TrainingEngagementsHub({ user }) {
   const [engagements, setEngagements] = useState(() =>
     JSON.parse(localStorage.getItem('training_engagements') || '[]')
@@ -152,6 +170,7 @@ function TrainingEngagementsHub({ user }) {
       base.sourcedBy = user.name;
       base.sourcedByName = user.name;
     }
+    base.connectionId = getUserDefaultConnection(user);
     return base;
   });
   const [editId, setEditId] = useState('');
@@ -339,6 +358,15 @@ function TrainingEngagementsHub({ user }) {
       totalAmount: netAmount,
       notes: form.notes,
       paymentStatus: form.paymentStatus,
+      ownerSuperadminId:
+        (user?.role === 'superadmin' || user?.role === 'platform_owner')
+          ? user?.id
+          : getEmployeeConnectionContext(user, form.connectionId)?.superadminId || '',
+      connectionId:
+        (user?.role === 'superadmin' || user?.role === 'platform_owner')
+          ? (form.connectionId || getUserDefaultConnection(user))
+          : getEmployeeConnectionContext(user, form.connectionId)?.connectionId || '',
+      sourcedByUserId: user?.id || '',
       paidDate:
         form.paymentStatus === 'Paid'
           ? (editId
@@ -375,6 +403,7 @@ function TrainingEngagementsHub({ user }) {
       base.sourcedBy = user.name;
       base.sourcedByName = user.name;
     }
+    base.connectionId = getUserDefaultConnection(user);
     setForm(base);
     setEditId('');
   };
@@ -405,6 +434,7 @@ function TrainingEngagementsHub({ user }) {
       notes: row.notes || '',
       tdsApplicable: row.tdsApplicable !== false,
       paymentStatus: row.paymentStatus || 'Invoiced',
+      connectionId: row.connectionId || getUserDefaultConnection(user),
       sourcedBy: row.sourcedBy || user?.employeeId || user?.name || '',
       sourcedByName: row.sourcedByName || user?.name || ''
     });
@@ -472,6 +502,7 @@ function TrainingEngagementsHub({ user }) {
       base.sourcedBy = user.name;
       base.sourcedByName = user.name;
     }
+    base.connectionId = getUserDefaultConnection(user);
     setForm(base);
     const now = new Date();
     setPickerMonth(new Date(now.getFullYear(), now.getMonth(), 1));
@@ -479,14 +510,36 @@ function TrainingEngagementsHub({ user }) {
 
   // ── Ownership filter: employees only see their own records ──
   const visibleEngagements = useMemo(() => {
-    if (user?.role === 'superadmin') return engagements;
+    if ((user?.role === 'superadmin' || user?.role === 'platform_owner')) {
+      const myEmployeeIds = new Set(
+        (employeeOptions || [])
+          .filter((x) => x.role === 'employee')
+          .map((x) => x.employeeId || x._id)
+          .filter(Boolean)
+      );
+
+      return engagements.filter((x) => {
+        if (x.ownerSuperadminId) {
+          return String(x.ownerSuperadminId) === String(user.id);
+        }
+        // Legacy fallback where ownerSuperadminId does not exist yet.
+        return (
+          x.sourcedBy === user?.employeeId ||
+          x.sourcedByName === user?.name ||
+          myEmployeeIds.has(x.sourcedBy)
+        );
+      });
+    }
     // Employee: match by employeeId (preferred) or name
     const myId = user?.employeeId || user?.name || '';
     if (!myId) return [];
     return engagements.filter(
-      (x) => x.sourcedBy === myId || x.sourcedByName === user?.name
+      (x) =>
+        x.sourcedByUserId === user?.id ||
+        x.sourcedBy === myId ||
+        x.sourcedByName === user?.name
     );
-  }, [engagements, user]);
+  }, [engagements, user, employeeOptions]);
 
   const stats = useMemo(() => {
     const totalDays = visibleEngagements.reduce((s, x) => s + Number(x.totalDays || 0), 0);
@@ -572,7 +625,7 @@ function TrainingEngagementsHub({ user }) {
       <div className="summary-cards">
         <div className="ops-card summary-card teaching-stat-card"><div className="stat-value">{stats.total}</div><div className="stat-label">Total Engagements</div></div>
         <div className="ops-card summary-card teaching-stat-card accent-blue"><div className="stat-value">{stats.totalDays}</div><div className="stat-label">Total Days</div></div>
-        {user?.role === 'superadmin' && (
+        {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
           <>
             <div className="ops-card summary-card teaching-stat-card accent-green"><div className="stat-value">{toInr(stats.totalGross)}</div><div className="stat-label">Gross Value</div></div>
             <div className="ops-card summary-card teaching-stat-card"><div className="stat-value">{toInr(stats.totalTds)}</div><div className="stat-label">Total TDS</div></div>
@@ -709,13 +762,13 @@ function TrainingEngagementsHub({ user }) {
                 <input className="form-control" type="number" min="0" value={form.learners} onChange={(e) => handleField('learners', e.target.value)} />
               </div>
 
-              {user?.role === 'superadmin' && (
+              {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
                 <div className="form-group">
                   <label>Rate Per Day (INR)</label>
                   <input className="form-control" type="number" min="0" value={form.ratePerDay} onChange={(e) => handleField('ratePerDay', e.target.value)} />
                 </div>
               )}
-              {user?.role === 'superadmin' && (
+              {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
                 <div className="form-group">
                   <label>TDS Handling</label>
                   <select className="form-control" value={form.tdsApplicable ? 'yes' : 'no'} onChange={(e) => handleField('tdsApplicable', e.target.value === 'yes')}>
@@ -734,6 +787,25 @@ function TrainingEngagementsHub({ user }) {
                   <option value="Paid">Paid</option>
                 </select>
               </div>
+
+              {user?.role === 'employee' && ((user?.connections || []).filter((c) => c.isActive !== false).length > 1) && (
+                <div className="form-group">
+                  <label>Connection Scope</label>
+                  <select
+                    className="form-control"
+                    value={form.connectionId}
+                    onChange={(e) => handleField('connectionId', e.target.value)}
+                  >
+                    {(user.connections || [])
+                      .filter((c) => c.isActive !== false)
+                      .map((c) => (
+                        <option key={`${c.superadminId}-${c.connectionId}`} value={c.connectionId}>
+                          {c.connectionId} - SuperAdmin {String(c.superadminId).slice(-6)}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
 
               <div className="form-group">
                 <label>Sourced By (Employee)</label>
@@ -784,7 +856,7 @@ function TrainingEngagementsHub({ user }) {
               <textarea className="form-control" rows={3} value={form.notes} onChange={(e) => handleField('notes', e.target.value)} />
             </div>
 
-{user?.role === 'superadmin' && (
+{(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
             <div style={{ marginBottom: '0.9rem', fontSize: '0.84rem', color: 'var(--ops-text-secondary)' }}>
               {(() => {
                 const totalDays = getTotalDays(form);
@@ -916,10 +988,10 @@ function TrainingEngagementsHub({ user }) {
                     <th>Date Range</th>
                     <th>Days</th>
                     <th>Hours/Day</th>
-                    {user?.role === 'superadmin' && <th>Rate/Day</th>}
-                    {user?.role === 'superadmin' && <th>Gross</th>}
-                    {user?.role === 'superadmin' && <th>TDS</th>}
-                    {user?.role === 'superadmin' && <th>Net Payable</th>}
+                    {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>Rate/Day</th>}
+                    {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>Gross</th>}
+                    {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>TDS</th>}
+                    {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>Net Payable</th>}
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -950,10 +1022,10 @@ function TrainingEngagementsHub({ user }) {
                       <td style={{ whiteSpace: 'nowrap' }}>{formatDateSummary(x)}</td>
                       <td>{x.totalDays}</td>
                       <td>{x.dailyHours || '—'}</td>
-                      {user?.role === 'superadmin' && <td>{toInr(x.ratePerDay)}</td>}
-                      {user?.role === 'superadmin' && <td>{toInr(getGrossAmount(x))}</td>}
-                      {user?.role === 'superadmin' && <td>{toInr(getTdsAmount(x))}</td>}
-                      {user?.role === 'superadmin' && <td><strong>{toInr(getNetAmount(x))}</strong></td>}
+                      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td>{toInr(x.ratePerDay)}</td>}
+                      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td>{toInr(getGrossAmount(x))}</td>}
+                      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td>{toInr(getTdsAmount(x))}</td>}
+                      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td><strong>{toInr(getNetAmount(x))}</strong></td>}
                       <td><span className="status-pill pill-neutral">{x.paymentStatus || 'Invoiced'}</span></td>
                       <td style={{ whiteSpace: 'nowrap' }}>
                         <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.76rem', marginRight: '6px' }} onClick={() => handleEdit(x)}>Edit</button>
@@ -986,9 +1058,9 @@ function TrainingEngagementsHub({ user }) {
                     <th>Sourced By</th>
                     <th>Date Range</th>
                     <th>Days</th>
-                    {user?.role === 'superadmin' && <th>Gross</th>}
-                    {user?.role === 'superadmin' && <th>TDS</th>}
-                    {user?.role === 'superadmin' && <th>Net</th>}
+                    {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>Gross</th>}
+                    {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>TDS</th>}
+                    {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>Net</th>}
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -1007,9 +1079,9 @@ function TrainingEngagementsHub({ user }) {
                       </td>
                       <td style={{ whiteSpace: 'nowrap' }}>{formatDateSummary(x)}</td>
                       <td>{x.totalDays}</td>
-                      {user?.role === 'superadmin' && <td>{toInr(getGrossAmount(x))}</td>}
-                      {user?.role === 'superadmin' && <td>{toInr(getTdsAmount(x))}</td>}
-                      {user?.role === 'superadmin' && <td>{toInr(getNetAmount(x))}</td>}
+                      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td>{toInr(getGrossAmount(x))}</td>}
+                      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td>{toInr(getTdsAmount(x))}</td>}
+                      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td>{toInr(getNetAmount(x))}</td>}
                       <td><span className="status-pill pill-neutral">{x.paymentStatus || 'Invoiced'}</span></td>
                     </tr>
                   ))}
@@ -1024,3 +1096,4 @@ function TrainingEngagementsHub({ user }) {
 }
 
 export default TrainingEngagementsHub;
+

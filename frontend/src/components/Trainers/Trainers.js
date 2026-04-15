@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { trainerAPI } from '../../services/api';
 
 const EMPTY_FORM = {
@@ -10,8 +10,73 @@ const EMPTY_FORM = {
   institution: ''
 };
 
-function Trainers() {
-  const [trainers, setTrainers] = useState(() =>
+function isEngagementVisibleForUser(row, user) {
+  if (!user) return true;
+
+  if ((user.role === 'superadmin' || user.role === 'platform_owner')) {
+    if (row.ownerSuperadminId) {
+      return String(row.ownerSuperadminId) === String(user.id);
+    }
+    return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
+  }
+
+  if (row.sourcedByUserId) {
+    return String(row.sourcedByUserId) === String(user.id);
+  }
+  return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
+}
+
+function isTrainerVisibleForUser(trainer, user, scopedEngagements) {
+  if (!user) return true;
+
+  if ((user.role === 'superadmin' || user.role === 'platform_owner')) {
+    if (trainer.ownerSuperadminId) {
+      return String(trainer.ownerSuperadminId) === String(user.id);
+    }
+    if (trainer.sourcedByUserId) {
+      return false;
+    }
+  } else {
+    if (trainer.sourcedByUserId) {
+      return String(trainer.sourcedByUserId) === String(user.id);
+    }
+    if (trainer.sourcedBy || trainer.sourcedByName) {
+      return trainer.sourcedBy === user.employeeId || trainer.sourcedByName === user.name;
+    }
+  }
+
+  const trainerId = String(trainer.id || trainer._id || '');
+  const trainerName = String(trainer.trainerName || '').trim().toLowerCase();
+  return scopedEngagements.some((row) => {
+    if (trainerId && row.trainerId && String(row.trainerId) === trainerId) {
+      return true;
+    }
+    return trainerName && String(row.trainerName || '').trim().toLowerCase() === trainerName;
+  });
+}
+
+function getOwnershipDefaults(user) {
+  if (!user) {
+    return {
+      ownerSuperadminId: '',
+      connectionId: '',
+      sourcedByUserId: '',
+      sourcedBy: '',
+      sourcedByName: ''
+    };
+  }
+
+  return {
+    ownerSuperadminId: (user.role === 'superadmin' || user.role === 'platform_owner') ? user.id : '',
+    connectionId: (user.role === 'superadmin' || user.role === 'platform_owner') ? (user.defaultConnectionId || '') : '',
+    sourcedByUserId: user.id || '',
+    sourcedBy: user.employeeId || '',
+    sourcedByName: user.name || ''
+  };
+}
+
+function Trainers({ user }) {
+  const [allTrainers, setAllTrainers] = useState(() =>
     JSON.parse(localStorage.getItem('trainer_profiles') || '[]')
   );
   const [selectedId, setSelectedId] = useState('');
@@ -21,9 +86,19 @@ function Trainers() {
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState('');
 
+  const scopedEngagements = useMemo(() => {
+    const rows = JSON.parse(localStorage.getItem('training_engagements') || '[]');
+    return rows.filter((row) => isEngagementVisibleForUser(row, user));
+  }, [user]);
+
+  const trainers = useMemo(
+    () => allTrainers.filter((trainer) => isTrainerVisibleForUser(trainer, user, scopedEngagements)),
+    [allTrainers, user, scopedEngagements]
+  );
+
   const persist = (next) => {
     localStorage.setItem('trainer_profiles', JSON.stringify(next));
-    setTrainers(next);
+    setAllTrainers(next);
   };
 
   const selectedTrainer = trainers.find((t) => t.id === selectedId);
@@ -64,7 +139,7 @@ function Trainers() {
 
   const handleDelete = (id) => {
     if (!window.confirm('Delete this trainer profile? This cannot be undone.')) return;
-    const next = trainers.filter((t) => t.id !== id);
+    const next = allTrainers.filter((t) => t.id !== id);
     persist(next);
     if (selectedId === id) setSelectedId('');
     if (editId === id) handleCancelForm();
@@ -76,6 +151,7 @@ function Trainers() {
       window.alert('Trainer name and email are required.');
       return;
     }
+    const existing = allTrainers.find((t) => t.id === editId);
     const saved = {
       id: editId || Date.now().toString(),
       trainerName: form.trainerName.trim(),
@@ -87,13 +163,18 @@ function Trainers() {
       yearsOfExperience: Number(form.yearsOfExperience || 0),
       specialization: form.specialization.trim(),
       institution: form.institution.trim(),
-      records: trainers.find((t) => t.id === editId)?.records || [],
-      createdAt: trainers.find((t) => t.id === editId)?.createdAt || new Date().toISOString()
+      records: existing?.records || [],
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      ownerSuperadminId: existing?.ownerSuperadminId || getOwnershipDefaults(user).ownerSuperadminId,
+      connectionId: existing?.connectionId || getOwnershipDefaults(user).connectionId,
+      sourcedByUserId: existing?.sourcedByUserId || getOwnershipDefaults(user).sourcedByUserId,
+      sourcedBy: existing?.sourcedBy || getOwnershipDefaults(user).sourcedBy,
+      sourcedByName: existing?.sourcedByName || getOwnershipDefaults(user).sourcedByName
     };
 
     const next = editId
-      ? trainers.map((t) => (t.id === editId ? saved : t))
-      : [saved, ...trainers];
+      ? allTrainers.map((t) => (t.id === editId ? saved : t))
+      : [saved, ...allTrainers];
 
     persist(next);
     setSelectedId(saved.id);
@@ -126,19 +207,21 @@ function Trainers() {
         specialization: (savedTrainer.topics || extracted.topics || []).join(', '),
         institution: '',
         records: [],
-        createdAt: savedTrainer.createdAt || new Date().toISOString()
+        createdAt: savedTrainer.createdAt || new Date().toISOString(),
+        ...getOwnershipDefaults(user)
       };
 
-      const existingIdx = trainers.findIndex(
+      const existingIdx = allTrainers.findIndex(
         (t) =>
+          isTrainerVisibleForUser(t, user, scopedEngagements) &&
           t.userProfile?.email &&
           mapped.userProfile.email &&
           t.userProfile.email.toLowerCase() === mapped.userProfile.email.toLowerCase()
       );
       const next =
         existingIdx === -1
-          ? [mapped, ...trainers]
-          : trainers.map((t, i) =>
+          ? [mapped, ...allTrainers]
+          : allTrainers.map((t, i) =>
               i === existingIdx ? { ...t, ...mapped, records: t.records || [] } : t
             );
 
@@ -501,3 +584,4 @@ function Trainers() {
 }
 
 export default Trainers;
+

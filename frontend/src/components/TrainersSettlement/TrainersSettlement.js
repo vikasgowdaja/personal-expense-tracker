@@ -32,25 +32,95 @@ function daysSince(dateLike) {
   return days > 0 ? days : 0;
 }
 
-function getTrainingEngagements() {
+function isEngagementVisibleForUser(row, user) {
+  if (!user) return true;
+
+  if ((user.role === 'superadmin' || user.role === 'platform_owner')) {
+    if (row.ownerSuperadminId) {
+      return String(row.ownerSuperadminId) === String(user.id);
+    }
+    return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
+  }
+
+  if (row.sourcedByUserId) {
+    return String(row.sourcedByUserId) === String(user.id);
+  }
+  return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
+}
+
+function getTrainingEngagements(user) {
   try {
-    return JSON.parse(localStorage.getItem('training_engagements') || '[]');
+    const all = JSON.parse(localStorage.getItem('training_engagements') || '[]');
+    return all.filter((row) => isEngagementVisibleForUser(row, user));
   } catch {
     return [];
   }
 }
 
-function getTrainerProfiles() {
+function getTrainerProfiles(user, scopedEngagements) {
   try {
-    return JSON.parse(localStorage.getItem('trainer_profiles') || '[]');
+    const all = JSON.parse(localStorage.getItem('trainer_profiles') || '[]');
+    if (!user) return all;
+
+    const scopedIds = new Set(scopedEngagements.map((row) => String(row.trainerId || '')));
+    const scopedNames = new Set(
+      scopedEngagements.map((row) => String(row.trainerName || '').trim().toLowerCase()).filter(Boolean)
+    );
+
+    return all.filter((trainer) => {
+      if ((user.role === 'superadmin' || user.role === 'platform_owner')) {
+        if (trainer.ownerSuperadminId) {
+          return String(trainer.ownerSuperadminId) === String(user.id);
+        }
+        if (trainer.sourcedByUserId) {
+          return false;
+        }
+      } else {
+        if (trainer.sourcedByUserId) {
+          return String(trainer.sourcedByUserId) === String(user.id);
+        }
+        if (trainer.sourcedBy || trainer.sourcedByName) {
+          return trainer.sourcedBy === user.employeeId || trainer.sourcedByName === user.name;
+        }
+      }
+
+      const trainerId = String(trainer.id || trainer._id || '');
+      const trainerName = String(trainer.trainerName || '').trim().toLowerCase();
+      return (trainerId && scopedIds.has(trainerId)) || (trainerName && scopedNames.has(trainerName));
+    });
   } catch {
     return [];
   }
 }
 
-function getTrainerSettlements() {
+function getTrainerSettlementsFromList(all, user, scopedEngagements) {
+  const engagementIds = new Set((scopedEngagements || []).map((row) => row.id));
+
+  return (all || []).filter((item) => {
+    if (item.trainingRecordId) {
+      return engagementIds.has(item.trainingRecordId);
+    }
+
+    if (!user) return true;
+
+    if ((user.role === 'superadmin' || user.role === 'platform_owner')) {
+      if (item.ownerSuperadminId) {
+        return String(item.ownerSuperadminId) === String(user.id);
+      }
+      return item.sourcedBy === user.employeeId || item.sourcedByName === user.name;
+    }
+
+    if (item.sourcedByUserId) {
+      return String(item.sourcedByUserId) === String(user.id);
+    }
+    return item.sourcedBy === user.employeeId || item.sourcedByName === user.name;
+  });
+}
+
+function getTrainerSettlements(user, scopedEngagements) {
   try {
-    return JSON.parse(localStorage.getItem('trainer_settlements') || '[]');
+    const all = JSON.parse(localStorage.getItem('trainer_settlements') || '[]');
+    return getTrainerSettlementsFromList(all, user, scopedEngagements);
   } catch {
     return [];
   }
@@ -72,8 +142,8 @@ function parseNet(row) {
   return Number(row.totalAmount !== undefined ? row.totalAmount : gross - tds);
 }
 
-export default function TrainersSettlement() {
-  const [, setVersion] = useState(0);
+export default function TrainersSettlement({ user }) {
+  const [version, setVersion] = useState(0);
   const [agingTrainerFilter, setAgingTrainerFilter] = useState('');
   const [agingCollegeFilter, setAgingCollegeFilter] = useState('');
   const [agingOrganizationFilter, setAgingOrganizationFilter] = useState('');
@@ -101,13 +171,13 @@ export default function TrainersSettlement() {
     notes: ''
   });
 
-  const trainingRows = getTrainingEngagements();
-  const settlements = getTrainerSettlements();
+  const trainingRows = useMemo(() => getTrainingEngagements(user), [user, version]);
+  const settlements = useMemo(() => getTrainerSettlements(user, trainingRows), [user, trainingRows, version]);
 
   const trainerNames = useMemo(() => {
     const byName = new Map();
 
-    getTrainerProfiles().forEach((trainer) => {
+    getTrainerProfiles(user, trainingRows).forEach((trainer) => {
       const name = (trainer.trainerName || '').trim();
       if (!name || PLACEHOLDER_TRAINER_PATTERN.test(name)) return;
       byName.set(name.toLowerCase(), { id: trainer.id || name.toLowerCase(), name });
@@ -122,7 +192,7 @@ export default function TrainersSettlement() {
     });
 
     return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [trainingRows]);
+  }, [trainingRows, user]);
 
   const engagementOptions = useMemo(() => {
     return trainingRows.map((row) => {
@@ -170,8 +240,12 @@ export default function TrainersSettlement() {
   const doneOptions = filteredOptions.filter((item) => item.hasSettlement);
 
   const updateSettlements = (updater) => {
-    const next = updater(getTrainerSettlements());
-    localStorage.setItem('trainer_settlements', JSON.stringify(next));
+    const all = JSON.parse(localStorage.getItem('trainer_settlements') || '[]');
+    const scoped = getTrainerSettlementsFromList(all, user, trainingRows);
+    const nextScoped = updater(scoped);
+    const scopedIds = new Set(scoped.map((item) => item.id));
+    const untouched = all.filter((item) => !scopedIds.has(item.id));
+    localStorage.setItem('trainer_settlements', JSON.stringify([...nextScoped, ...untouched]));
     setVersion((v) => v + 1);
   };
 
@@ -251,6 +325,11 @@ export default function TrainersSettlement() {
       paidDate: settlementForm.paidDate,
       status: settlementForm.status,
       notes: settlementForm.notes,
+      ownerSuperadminId: (user?.role === 'superadmin' || user?.role === 'platform_owner') ? user.id : '',
+      connectionId: (user?.role === 'superadmin' || user?.role === 'platform_owner') ? (user.defaultConnectionId || '') : '',
+      sourcedByUserId: user?.id || '',
+      sourcedBy: user?.employeeId || '',
+      sourcedByName: user?.name || '',
       updatedAt: new Date().toISOString()
     };
 
@@ -561,3 +640,4 @@ export default function TrainersSettlement() {
     </section>
   );
 }
+

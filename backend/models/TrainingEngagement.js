@@ -44,6 +44,24 @@ const trainingEngagementSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  ownerSuperadminId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true,
+    default: null
+  },
+  connectionId: {
+    type: String,
+    trim: true,
+    default: '',
+    index: true
+  },
+  sourcedByUserId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true,
+    default: null
+  },
   // ── Engagement-level bounds ──
   institutionId: {
     type: mongoose.Schema.Types.ObjectId,

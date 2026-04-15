@@ -886,6 +886,40 @@
   width: 100%;
 }
 
+.profile-share-box {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  border-top: 1px solid var(--ops-border);
+  padding-top: 14px;
+}
+
+.profile-share-box h3 {
+  margin: 0 0 6px;
+  font-size: 1.02rem;
+}
+
+.profile-share-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+
+.profile-share-grid label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.profile-share-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
 .teaching-stat-card {
   border-left: 4px solid #2563eb;
 }
@@ -987,5 +1021,9 @@
   .profile-photo {
     width: 120px;
     height: 120px;
+  }
+
+  .profile-share-actions .btn {
+    width: 100%;
   }
 }

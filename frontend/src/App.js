@@ -69,7 +69,10 @@ function App() {
             name: freshUser.name,
             email: freshUser.email,
             role: freshUser.role,
+            adminCode: freshUser.adminCode || '',
             employeeId: freshUser.employeeId,
+            defaultConnectionId: freshUser.defaultConnectionId || '',
+            connections: freshUser.connections || [],
             mobile: freshUser.mobile,
             profilePhoto: freshUser.profilePhoto
           }));
@@ -78,7 +81,10 @@ function App() {
             name: freshUser.name,
             email: freshUser.email,
             role: freshUser.role,
+            adminCode: freshUser.adminCode || '',
             employeeId: freshUser.employeeId,
+            defaultConnectionId: freshUser.defaultConnectionId || '',
+            connections: freshUser.connections || [],
             mobile: freshUser.mobile,
             profilePhoto: freshUser.profilePhoto
           });
@@ -122,6 +128,8 @@ function App() {
     return <div className="loading">Loading...</div>;
   }
 
+  const isPrivileged = user?.role === 'superadmin' || user?.role === 'platform_owner';
+
   return (
     <Router>
       <div className="App">
@@ -141,29 +149,29 @@ function App() {
             <Route index element={<Navigate to="/dashboard" />} />
             <Route
               path="dashboard"
-              element={user?.role === 'superadmin' ? <Dashboard user={user} /> : <EmployeeDashboard user={user} />}
+              element={isPrivileged ? <Dashboard user={user} /> : <EmployeeDashboard user={user} />}
             />
             <Route path="calendar" element={<CalendarHub />} />
             <Route
               path="finance"
               element={
-                <ProtectedRoute user={user} requiredRole="superadmin">
-                  <Payments />
+                <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
+                  <Payments user={user} />
                 </ProtectedRoute>
               }
             />
             <Route
               path="trainer-settlements"
               element={
-                <ProtectedRoute user={user} requiredRole="superadmin">
-                  <TrainersSettlement />
+                <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
+                  <TrainersSettlement user={user} />
                 </ProtectedRoute>
               }
             />
             <Route
               path="expenses"
               element={
-                <ProtectedRoute user={user} requiredRole="superadmin">
+                <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
                   <ExpenseList />
                 </ProtectedRoute>
               }
@@ -171,7 +179,7 @@ function App() {
             <Route
               path="upload-receipt"
               element={
-                <ProtectedRoute user={user} requiredRole="superadmin">
+                <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
                   <UploadReceipt />
                 </ProtectedRoute>
               }
@@ -179,8 +187,8 @@ function App() {
             <Route
               path="insights"
               element={
-                <ProtectedRoute user={user} requiredRole="superadmin">
-                  <Insights />
+                <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
+                  <Insights user={user} />
                 </ProtectedRoute>
               }
             />
@@ -197,24 +205,24 @@ function App() {
               path="vendor"
               element={<Navigate to="/training-engagements" replace />}
             />
-            <Route path="trainers" element={<Trainers />} />
+            <Route path="trainers" element={<Trainers user={user} />} />
             <Route path="colleges" element={<Colleges />} />
             <Route path="topics" element={<Topics />} />
             <Route path="organizations" element={<Organizations />} />
 
-            {/* SuperAdmin-only routes */}
+            {/* Privileged routes (SuperAdmin + Platform Owner) */}
             <Route
               path="financial"
               element={
-                <ProtectedRoute user={user} requiredRole="superadmin">
-                  <FinancialDashboard />
+                <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
+                  <FinancialDashboard user={user} />
                 </ProtectedRoute>
               }
             />
             <Route
               path="employees"
               element={
-                <ProtectedRoute user={user} requiredRole="superadmin">
+                <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
                   <EmployeeManager />
                 </ProtectedRoute>
               }

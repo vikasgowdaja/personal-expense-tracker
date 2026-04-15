@@ -9,7 +9,8 @@ function Register({ onLogin }) {
     name: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    adminCode: ''
   });
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
@@ -31,13 +32,18 @@ function Register({ onLogin }) {
       setError('Password must be at least 8 characters');
       return;
     }
+    if (!formData.adminCode.trim()) {
+      setError('SuperAdmin admin code is required');
+      return;
+    }
 
     setLoading(true);
     try {
       await authAPI.register({
         name: formData.name,
         email: formData.email,
-        password: formData.password
+        password: formData.password,
+        adminCode: formData.adminCode.trim().toUpperCase()
       });
       setInfo('Registration successful! Check your email for the OTP.');
       setStep('verify');
@@ -116,6 +122,19 @@ function Register({ onLogin }) {
                 name="confirmPassword"
                 value={formData.confirmPassword}
                 onChange={onChange}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="adminCode">SuperAdmin Admin Code</label>
+              <input
+                type="text"
+                className="form-control"
+                id="adminCode"
+                name="adminCode"
+                value={formData.adminCode}
+                onChange={onChange}
+                placeholder="e.g. ADM-ABC123"
                 required
               />
             </div>

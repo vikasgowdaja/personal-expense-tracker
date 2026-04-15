@@ -208,6 +208,7 @@ export const employeeAPI = {
   getAll: () => api.get('/employees'),
   create: (data) => api.post('/employees', data),
   update: (id, data) => api.put(`/employees/${id}`, data),
+  updateConnection: (id, connectionId, isActive) => api.patch(`/employees/${id}/connection`, { connectionId, isActive }),
   promoteRole: (id, role) => api.patch(`/employees/${id}/role`, { role }),
   remove: (id) => api.delete(`/employees/${id}`)
 };

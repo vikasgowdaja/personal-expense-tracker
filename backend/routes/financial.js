@@ -3,9 +3,39 @@ const router = express.Router();
 const { requireAuth, requireRole } = require('../middleware/auth');
 const TrainingEngagement = require('../models/TrainingEngagement');
 const Expense = require('../models/Expense');
+const User = require('../models/User');
 
 // All routes require authentication AND superadmin role
-router.use(requireAuth, requireRole('superadmin'));
+router.use(requireAuth, requireRole('superadmin', 'platform_owner'));
+
+async function tenantScopeForSuperadmin(superadminId) {
+  const managedEmployees = await User.find({
+    role: 'employee',
+    connections: {
+      $elemMatch: {
+        superadminId,
+        isActive: true
+      }
+    }
+  }).select('_id').lean();
+
+  const managedEmployeeIds = managedEmployees.map((e) => e._id);
+
+  return {
+    $or: [
+      { ownerSuperadminId: superadminId },
+      { user: superadminId },
+      ...(managedEmployeeIds.length ? [{ user: { $in: managedEmployeeIds } }] : [])
+    ]
+  };
+}
+
+async function getFinancialScopeForUser(userId) {
+  const user = await User.findById(userId).select('role').lean();
+  if (!user) return { _id: null };
+  if (user.role === 'platform_owner') return {};
+  return tenantScopeForSuperadmin(userId);
+}
 
 /**
  * GET /api/financial/summary
@@ -13,8 +43,9 @@ router.use(requireAuth, requireRole('superadmin'));
  */
 router.get('/summary', async (req, res) => {
   try {
+    const engagementScope = await getFinancialScopeForUser(req.user.id);
     const [engagements, expenses] = await Promise.all([
-      TrainingEngagement.find().lean(),
+      TrainingEngagement.find(engagementScope).lean(),
       Expense.find().lean()
     ]);
 
@@ -43,7 +74,8 @@ router.get('/summary', async (req, res) => {
  */
 router.get('/payouts', async (req, res) => {
   try {
-    const engagements = await TrainingEngagement.find()
+    const scope = await getFinancialScopeForUser(req.user.id);
+    const engagements = await TrainingEngagement.find(scope)
       .populate('trainer', 'name email')
       .populate('institution', 'name')
       .lean();
@@ -73,7 +105,8 @@ router.get('/payouts', async (req, res) => {
  */
 router.get('/margins', async (req, res) => {
   try {
-    const engagements = await TrainingEngagement.find().lean();
+    const scope = await getFinancialScopeForUser(req.user.id);
+    const engagements = await TrainingEngagement.find(scope).lean();
 
     const byMonth = {};
     for (const e of engagements) {

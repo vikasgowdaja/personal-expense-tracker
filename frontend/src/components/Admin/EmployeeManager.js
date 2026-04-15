@@ -1,9 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { employeeAPI } from '../../services/api';
 
-const emptyForm = { name: '', email: '', password: '' };
+const emptyForm = { name: '', email: '', password: '', connectionId: '' };
 
 function RoleBadge({ role }) {
+  if (role === 'platform_owner') {
+    return (
+      <span style={{
+        padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 600,
+        background: '#fee2e2',
+        color: '#991b1b'
+      }}>
+        Platform Owner
+      </span>
+    );
+  }
   const isSuperAdmin = role === 'superadmin';
   return (
     <span style={{
@@ -24,6 +35,18 @@ function EmployeeManager() {
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState('employee');
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('user') || '{}');
+      setCurrentUserRole(stored.role || 'employee');
+    } catch {
+      setCurrentUserRole('employee');
+    }
+  }, []);
+
+  const canManageRoles = currentUserRole === 'platform_owner';
 
   useEffect(() => { fetchUsers(); }, []);
 
@@ -46,8 +69,8 @@ function EmployeeManager() {
         await employeeAPI.update(editId, { name: form.name });
         setInfo('Account updated.');
       } else {
-        await employeeAPI.create(form);
-        setInfo('Employee created — they can log in immediately.');
+        const res = await employeeAPI.create(form);
+        setInfo(res.data?.message || 'Employee created — they can log in immediately.');
       }
       setForm(emptyForm);
       setEditId(null);
@@ -100,7 +123,9 @@ function EmployeeManager() {
         <div>
           <h2 style={{ marginBottom: '4px' }}>User Management</h2>
           <p style={{ color: '#6b7280', fontSize: '14px' }}>
-            Manage accounts and promote employees to Super Admin directly here.
+            {canManageRoles
+              ? 'Manage accounts and handle employee/superadmin role promotions.'
+              : 'Manage employees under your scope. Role promotion is handled by Platform Owner only.'}
           </p>
         </div>
         <button
@@ -154,6 +179,16 @@ function EmployeeManager() {
                     minLength={8}
                   />
                 </div>
+                <div className="form-group">
+                  <label>Connection ID (optional)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={form.connectionId}
+                    onChange={e => setForm({ ...form, connectionId: e.target.value.toUpperCase() })}
+                    placeholder="CNX-TEAM-A"
+                  />
+                </div>
               </>
             )}
           </div>
@@ -172,13 +207,13 @@ function EmployeeManager() {
         </form>
       )}
 
-      {/* Super Admins */}
-      {superAdmins.length > 0 && (
+      {/* Super Admins (Platform Owner only) */}
+      {canManageRoles && superAdmins.length > 0 && (
         <section style={{ marginBottom: '32px' }}>
           <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#6d28d9', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Super Admins
           </h3>
-          <UserTable users={superAdmins} onEdit={startEdit} onPromote={handlePromote} onDelete={handleDelete} />
+          <UserTable users={superAdmins} onEdit={startEdit} onPromote={handlePromote} onDelete={handleDelete} canManageRoles={canManageRoles} />
         </section>
       )}
 
@@ -187,18 +222,18 @@ function EmployeeManager() {
         <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#1d4ed8', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Employees
         </h3>
-        <UserTable users={employees} onEdit={startEdit} onPromote={handlePromote} onDelete={handleDelete} />
+        <UserTable users={employees} onEdit={startEdit} onPromote={handlePromote} onDelete={handleDelete} canManageRoles={canManageRoles} />
       </section>
     </div>
   );
 }
 
-function UserTable({ users, onEdit, onPromote, onDelete }) {
+function UserTable({ users, onEdit, onPromote, onDelete, canManageRoles }) {
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
       <thead>
         <tr style={{ background: '#f9fafb' }}>
-          {['Employee ID', 'Name', 'Email', 'Role', 'Verified', 'Created', 'Actions'].map(h => (
+          {['Employee ID', 'Name', 'Email', 'Role', 'Connection', 'Verified', 'Created', 'Actions'].map(h => (
             <th key={h} style={{ padding: '10px 12px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>{h}</th>
           ))}
         </tr>
@@ -215,6 +250,9 @@ function UserTable({ users, onEdit, onPromote, onDelete }) {
             <td style={{ padding: '10px 12px', fontWeight: 600 }}>{u.name}</td>
             <td style={{ padding: '10px 12px', color: '#6b7280' }}>{u.email}</td>
             <td style={{ padding: '10px 12px' }}><RoleBadge role={u.role} /></td>
+            <td style={{ padding: '10px 12px', fontSize: '12px', color: '#4b5563' }}>
+              {u.defaultConnectionId || (u.connections || [])[0]?.connectionId || '—'}
+            </td>
             <td style={{ padding: '10px 12px' }}>
               <span style={{
                 padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 600,
@@ -233,18 +271,20 @@ function UserTable({ users, onEdit, onPromote, onDelete }) {
               >
                 Edit
               </button>
-              <button
-                className="btn btn-secondary"
-                style={{
-                  fontSize: '12px', padding: '4px 10px',
-                  background: u.role === 'superadmin' ? '#fef3c7' : '#ede9fe',
-                  color: u.role === 'superadmin' ? '#92400e' : '#6d28d9',
-                  border: 'none'
-                }}
-                onClick={() => onPromote(u)}
-              >
-                {u.role === 'superadmin' ? 'Demote' : 'Promote'}
-              </button>
+              {canManageRoles && u.role !== 'platform_owner' && (
+                <button
+                  className="btn btn-secondary"
+                  style={{
+                    fontSize: '12px', padding: '4px 10px',
+                    background: u.role === 'superadmin' ? '#fef3c7' : '#ede9fe',
+                    color: u.role === 'superadmin' ? '#92400e' : '#6d28d9',
+                    border: 'none'
+                  }}
+                  onClick={() => onPromote(u)}
+                >
+                  {u.role === 'superadmin' ? 'Demote' : 'Promote'}
+                </button>
+              )}
               <button
                 className="btn btn-danger"
                 style={{ fontSize: '12px', padding: '4px 10px' }}
@@ -256,7 +296,7 @@ function UserTable({ users, onEdit, onPromote, onDelete }) {
           </tr>
         ))}
         {users.length === 0 && (
-          <tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#9ca3af' }}>None yet.</td></tr>
+          <tr><td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: '#9ca3af' }}>None yet.</td></tr>
         )}
       </tbody>
     </table>

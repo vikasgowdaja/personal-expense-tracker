@@ -97,6 +97,26 @@ function statusPillStyle(status) {
   return { background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' };
 }
 
+function isSettlementVisibleForUser(item, user, scopedEngagementIds) {
+  if (item.trainingRecordId) {
+    return scopedEngagementIds.has(item.trainingRecordId);
+  }
+
+  if (!user) return true;
+
+  if (user.role === 'superadmin' || user.role === 'platform_owner') {
+    if (item.ownerSuperadminId) {
+      return String(item.ownerSuperadminId) === String(user.id);
+    }
+    return item.sourcedBy === user.employeeId || item.sourcedByName === user.name;
+  }
+
+  if (item.sourcedByUserId) {
+    return String(item.sourcedByUserId) === String(user.id);
+  }
+  return item.sourcedBy === user.employeeId || item.sourcedByName === user.name;
+}
+
 function Dashboard({ user }) {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [cycleTrainerFilter, setCycleTrainerFilter] = useState('');
@@ -109,20 +129,38 @@ function Dashboard({ user }) {
   const [cycleSortBy, setCycleSortBy] = useState('ageDays');
   const [cycleSortDirection, setCycleSortDirection] = useState('desc');
 
-  const engagements = useMemo(
-    () => JSON.parse(localStorage.getItem('training_engagements') || '[]'),
-    []
-  );
+  const engagements = useMemo(() => {
+    const all = JSON.parse(localStorage.getItem('training_engagements') || '[]');
+    if (!user) return all;
+
+    if (user.role === 'superadmin' || user.role === 'platform_owner') {
+      return all.filter((row) => {
+        if (row.ownerSuperadminId) {
+          return String(row.ownerSuperadminId) === String(user.id);
+        }
+        // Legacy fallback rows (before ownerSuperadminId existed)
+        return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
+      });
+    }
+
+    return all.filter((row) => {
+      if (row.sourcedByUserId) {
+        return String(row.sourcedByUserId) === String(user.id);
+      }
+      return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
+    });
+  }, [user]);
 
   const trainers = useMemo(
     () => JSON.parse(localStorage.getItem('trainer_profiles') || '[]'),
     []
   );
 
-  const settlements = useMemo(
-    () => JSON.parse(localStorage.getItem('trainer_settlements') || '[]'),
-    []
-  );
+  const settlements = useMemo(() => {
+    const all = JSON.parse(localStorage.getItem('trainer_settlements') || '[]');
+    const scopedEngagementIds = new Set(engagements.map((row) => row.id));
+    return all.filter((item) => isSettlementVisibleForUser(item, user, scopedEngagementIds));
+  }, [engagements, user]);
 
   const analytics = useMemo(() => {
     const totals = engagements.reduce(
@@ -137,17 +175,17 @@ function Dashboard({ user }) {
     );
 
     const settledPaidByEngagement = settlements
-      .filter((item) => item.status === 'Paid' && item.trainingRecordId)
+      .filter((item) => String(item.status || '').toLowerCase() === 'paid' && item.trainingRecordId)
       .reduce((acc, item) => {
         acc[item.trainingRecordId] = (acc[item.trainingRecordId] || 0) + Number(item.amount || 0);
         return acc;
       }, {});
 
     const overallSettlementPaid = settlements
-      .filter((item) => item.status === 'Paid')
+      .filter((item) => String(item.status || '').toLowerCase() === 'paid')
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
-    const pendingSettlements = settlements.filter((item) => item.status !== 'Paid');
+    const pendingSettlements = settlements.filter((item) => String(item.status || '').toLowerCase() !== 'paid');
     const pendingSettlementAmount = pendingSettlements.reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const pendingSettlementCount = pendingSettlements.length;
 
@@ -398,7 +436,7 @@ function Dashboard({ user }) {
         <p>Overall TDS, overall revenue, in-hand revenue, counts, and month/year analysis.</p>
       </div>
 
-      {user?.role === 'superadmin' && (
+      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
         <div style={{
           background: 'linear-gradient(90deg, #7c3aed 0%, #6366f1 100%)',
           color: '#fff',
@@ -433,13 +471,13 @@ function Dashboard({ user }) {
           <div className="stat-value">{inr(analytics.totals.net)}</div>
           <div className="stat-label">In-hand Revenue</div>
         </div>
-        {user?.role === 'superadmin' && (
+        {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
           <div className="ops-card summary-card teaching-stat-card accent-blue">
             <div className="stat-value">{inr(analytics.overallSettlementPaid)}</div>
             <div className="stat-label">Trainer Settlement (Paid)</div>
           </div>
         )}
-        {user?.role === 'superadmin' && (
+        {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
           <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#d97706' }}>
             <div className="stat-value" style={{ color: '#d97706' }}>{inr(analytics.pendingSettlementAmount)}</div>
             <div className="stat-label">Pending Settlements</div>
@@ -451,13 +489,13 @@ function Dashboard({ user }) {
           <div className="stat-label">Pending Recovery from Payers</div>
           <div className="muted" style={{ marginTop: 6, fontSize: '0.75rem' }}>{analytics.pendingRecoveryCount} engagement(s) unpaid</div>
         </div>
-        {user?.role === 'superadmin' && (
+        {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
           <div className="ops-card summary-card teaching-stat-card accent-green">
             <div className="stat-value">{inr(analytics.overallMarginAmount)}</div>
             <div className="stat-label">Company Margin</div>
           </div>
         )}
-        {user?.role === 'superadmin' && (
+        {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
           <div className="ops-card summary-card teaching-stat-card">
             <div className="stat-value">{analytics.overallMarginPercent.toFixed(2)}%</div>
             <div className="stat-label">Margin %</div>
@@ -544,7 +582,7 @@ function Dashboard({ user }) {
         </article>
       </div>
 
-      {user?.role === 'superadmin' && (
+      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
       <article className="ops-card" style={{ marginTop: '1.2rem' }}>
         <h3>30 / 45 Day Cycle Tracking</h3>
 
@@ -663,7 +701,7 @@ function Dashboard({ user }) {
       </article>
       )}
 
-      {user?.role === 'superadmin' && (
+      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
       <article className="ops-card" style={{ marginTop: '1.2rem' }}>
         <h3>Engagement Margin Analysis</h3>
         {analytics.engagementMargins.length === 0 ? (

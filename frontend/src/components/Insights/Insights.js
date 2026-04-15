@@ -76,13 +76,55 @@ function RecoveryBar({ recovered, total }) {
   );
 }
 
-function Insights() {
+function isEngagementVisibleForUser(row, user) {
+  if (!user) return true;
+
+  if (user.role === 'superadmin' || user.role === 'platform_owner') {
+    if (row.ownerSuperadminId) {
+      return String(row.ownerSuperadminId) === String(user.id);
+    }
+    return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
+  }
+
+  if (row.sourcedByUserId) {
+    return String(row.sourcedByUserId) === String(user.id);
+  }
+  return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
+}
+
+function Insights({ user }) {
   const [financeRecords, setFinanceRecords] = useState([]);
   const [loadingFinance, setLoadingFinance] = useState(true);
 
   const logs = useMemo(() => JSON.parse(localStorage.getItem('daily_logs') || '[]'), []);
-  const engagements = useMemo(() => JSON.parse(localStorage.getItem('training_engagements') || '[]'), []);
-  const settlements = useMemo(() => JSON.parse(localStorage.getItem('trainer_settlements') || '[]'), []);
+  const engagements = useMemo(() => {
+    const all = JSON.parse(localStorage.getItem('training_engagements') || '[]');
+    return all.filter((row) => isEngagementVisibleForUser(row, user));
+  }, [user]);
+  const settlements = useMemo(() => {
+    const all = JSON.parse(localStorage.getItem('trainer_settlements') || '[]');
+    const engagementIds = new Set(engagements.map((row) => row.id));
+
+    return all.filter((item) => {
+      if (item.trainingRecordId) {
+        return engagementIds.has(item.trainingRecordId);
+      }
+
+      if (!user) return true;
+
+      if (user.role === 'superadmin' || user.role === 'platform_owner') {
+        if (item.ownerSuperadminId) {
+          return String(item.ownerSuperadminId) === String(user.id);
+        }
+        return item.sourcedBy === user.employeeId || item.sourcedByName === user.name;
+      }
+
+      if (item.sourcedByUserId) {
+        return String(item.sourcedByUserId) === String(user.id);
+      }
+      return item.sourcedBy === user.employeeId || item.sourcedByName === user.name;
+    });
+  }, [engagements, user]);
 
   const loadFinance = useCallback(async () => {
     setLoadingFinance(true);

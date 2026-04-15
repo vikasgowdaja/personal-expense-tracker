@@ -37,16 +37,37 @@ function StatCard({ label, value, color, sub }) {
   );
 }
 
-function FinancialDashboard() {
+function FinancialDashboard({ user }) {
   const [activeTab, setActiveTab] = useState('summary');
 
   const engagements = useMemo(() => {
-    try { return JSON.parse(localStorage.getItem('training_engagements') || '[]'); } catch { return []; }
-  }, []);
+    try {
+      const all = JSON.parse(localStorage.getItem('training_engagements') || '[]');
+      if (!user) return all;
+      if (user.role === 'superadmin' || user.role === 'platform_owner') {
+        return all.filter((row) => {
+          if (row.ownerSuperadminId) return String(row.ownerSuperadminId) === String(user.id);
+          return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
+        });
+      }
+      return all.filter((row) => {
+        if (row.sourcedByUserId) return String(row.sourcedByUserId) === String(user.id);
+        return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
+      });
+    } catch {
+      return [];
+    }
+  }, [user]);
 
   const settlements = useMemo(() => {
-    try { return JSON.parse(localStorage.getItem('trainer_settlements') || '[]'); } catch { return []; }
-  }, []);
+    try {
+      const all = JSON.parse(localStorage.getItem('trainer_settlements') || '[]');
+      const engagementIds = new Set((engagements || []).map((e) => e.id));
+      return all.filter((s) => !s.trainingRecordId || engagementIds.has(s.trainingRecordId));
+    } catch {
+      return [];
+    }
+  }, [engagements]);
 
   // ── Core metrics ─────────────────────────────────────────────────────────
   const metrics = useMemo(() => {

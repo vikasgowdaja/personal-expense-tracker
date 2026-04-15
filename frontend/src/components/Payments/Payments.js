@@ -172,6 +172,11 @@ function flattenVendorRecords(profiles) {
 function flattenTrainingRecords(engagements) {
   return engagements.map((row) => ({
     sourceType: 'training',
+    ownerSuperadminId: row.ownerSuperadminId || '',
+    connectionId: row.connectionId || '',
+    sourcedByUserId: row.sourcedByUserId || '',
+    sourcedBy: row.sourcedBy || '',
+    sourcedByName: row.sourcedByName || '',
     tdsApplicable: row.tdsApplicable !== false,
     tdsPercent: Number(row.tdsPercent || DEFAULT_TDS_PERCENT),
     grossAmount: Number(row.grossAmount || row.totalAmount || 0),
@@ -213,7 +218,7 @@ function flattenTrainingRecords(engagements) {
 // ── Tabs ─────────────────────────────────────────────────────────────────
 const TABS = ['By Organization', 'By Trainer', 'All Engagements'];
 
-export default function Payments() {
+export default function Payments({ user }) {
   const navigate = useNavigate();
   const SHOW_SETTLEMENT_IN_PAYMENTS = false;
   const [engagements, setEngagements] = useState([]);
@@ -288,7 +293,39 @@ export default function Payments() {
     const trainingRows = flattenTrainingRecords(getTrainingEngagements());
     const legacyRows = flattenLegacy(getLegacySessions());
     const vendorRows = flattenVendorRecords(getVendorTrainerProfiles());
-    return [...trainingRows, ...backendRows, ...legacyRows, ...vendorRows];
+    const combined = [...trainingRows, ...backendRows, ...legacyRows, ...vendorRows];
+
+    if (!user) return combined;
+
+    return combined.filter((row) => {
+      if (row.sourceType === 'backend') {
+        // Backend rows are already scoped by API.
+        return true;
+      }
+
+      if (row.sourceType === 'training') {
+        if (user.role === 'superadmin' || user.role === 'platform_owner') {
+          if (row.ownerSuperadminId) {
+            return String(row.ownerSuperadminId) === String(user.id);
+          }
+          return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
+        }
+        if (row.sourcedByUserId) {
+          return String(row.sourcedByUserId) === String(user.id);
+        }
+        return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
+      }
+
+      if (row.sourceType === 'legacy') {
+        return user.role === 'superadmin' || user.role === 'platform_owner';
+      }
+
+      if (row.sourceType === 'vendor') {
+        return user.role === 'superadmin' || user.role === 'platform_owner';
+      }
+
+      return true;
+    });
   })();
 
   const trainingEngagementOptions = getTrainingEngagements().map((row) => {

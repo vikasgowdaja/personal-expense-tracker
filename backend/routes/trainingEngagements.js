@@ -2,27 +2,89 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const auth = require('../middleware/auth');
 const TrainingEngagement = require('../models/TrainingEngagement');
+const User = require('../models/User');
 
 const router = express.Router();
 
 const STATUS_FLOW = ['Planned', 'Ongoing', 'Completed', 'Invoiced', 'Paid'];
+
+async function getUserWithConnections(userId) {
+  return User.findById(userId)
+    .select('role employeeId name defaultConnectionId connections')
+    .lean();
+}
+
+async function buildEngagementScope(userDoc) {
+  if (!userDoc) return { _id: null };
+
+  if (userDoc.role === 'platform_owner') {
+    return {};
+  }
+
+  if (userDoc.role === 'superadmin') {
+    const managedEmployees = await User.find({
+      role: 'employee',
+      connections: {
+        $elemMatch: {
+          superadminId: userDoc._id,
+          isActive: true
+        }
+      }
+    }).select('_id').lean();
+
+    const employeeIds = managedEmployees.map((e) => e._id);
+
+    return {
+      $or: [
+        { ownerSuperadminId: userDoc._id },
+        { user: userDoc._id },
+        ...(employeeIds.length ? [{ user: { $in: employeeIds } }] : [])
+      ]
+    };
+  }
+
+  const activeConnections = (userDoc.connections || []).filter((c) => c.isActive !== false);
+  const pairClauses = activeConnections.map((c) => ({
+    ownerSuperadminId: c.superadminId,
+    connectionId: c.connectionId
+  }));
+
+  return {
+    $or: [
+      { sourcedByUserId: userDoc._id },
+      { user: userDoc._id },
+      ...pairClauses
+    ]
+  };
+}
+
+function mergeScopeAndFilters(scope, filters) {
+  if (!filters || Object.keys(filters).length === 0) return scope;
+  return { $and: [scope, filters] };
+}
 
 // ── GET all engagements ──
 // Superadmin: sees ALL records across all users.
 // Employee: sees only their own.
 router.get('/', auth, async (req, res) => {
   try {
-    // Superadmins can see every engagement; employees only their own
-    const query = req.user.role === 'superadmin' ? {} : { user: req.user.id };
+    const userDoc = await getUserWithConnections(req.user.id);
+    if (!userDoc) {
+      return res.status(401).json({ message: 'User not found for scope resolution' });
+    }
+
+    const filters = {};
     if (req.query.status) {
-      query.status = req.query.status;
+      filters.status = req.query.status;
     }
     if (req.query.institutionId) {
-      query.institutionId = req.query.institutionId;
+      filters.institutionId = req.query.institutionId;
     }
     if (req.query.clientId) {
-      query.clientId = req.query.clientId;
+      filters.clientId = req.query.clientId;
     }
+
+    const query = mergeScopeAndFilters(await buildEngagementScope(userDoc), filters);
 
     const rows = await TrainingEngagement.find(query)
       .populate('institutionId', 'name location')
@@ -41,9 +103,12 @@ router.get('/', auth, async (req, res) => {
 // Superadmin: can retrieve any record; employee: only their own.
 router.get('/:id', auth, async (req, res) => {
   try {
-    const filter = req.user.role === 'superadmin'
-      ? { _id: req.params.id }
-      : { _id: req.params.id, user: req.user.id };
+    const userDoc = await getUserWithConnections(req.user.id);
+    if (!userDoc) {
+      return res.status(401).json({ message: 'User not found for scope resolution' });
+    }
+
+    const filter = mergeScopeAndFilters(await buildEngagementScope(userDoc), { _id: req.params.id });
 
     const row = await TrainingEngagement.findOne(filter)
       .populate('institutionId', 'name location contactPerson contactEmail contactPhone')
@@ -83,8 +148,49 @@ router.post(
     }
 
     try {
+      const userDoc = await getUserWithConnections(req.user.id);
+      if (!userDoc) {
+        return res.status(401).json({ message: 'User not found for scope resolution' });
+      }
+
+      let ownerSuperadminId = req.user.id;
+      let connectionId = req.body.connectionId || userDoc.defaultConnectionId || '';
+
+      if (userDoc.role === 'employee') {
+        const activeConnections = (userDoc.connections || []).filter((c) => c.isActive !== false);
+        if (activeConnections.length === 0) {
+          return res.status(403).json({ message: 'Employee has no active superadmin connections.' });
+        }
+
+        let selected = null;
+        if (req.body.ownerSuperadminId && req.body.connectionId) {
+          selected = activeConnections.find(
+            (c) => String(c.superadminId) === String(req.body.ownerSuperadminId) &&
+              String(c.connectionId) === String(req.body.connectionId)
+          );
+        } else if (req.body.connectionId) {
+          selected = activeConnections.find((c) => String(c.connectionId) === String(req.body.connectionId));
+        } else if (activeConnections.length === 1) {
+          selected = activeConnections[0];
+        }
+
+        if (!selected) {
+          return res.status(400).json({
+            message: 'Employee belongs to multiple superadmin connections. Pass ownerSuperadminId + connectionId.'
+          });
+        }
+
+        ownerSuperadminId = selected.superadminId;
+        connectionId = selected.connectionId;
+      } else if (!connectionId) {
+        connectionId = `SA-${String(req.user.id).slice(-6).toUpperCase()}`;
+      }
+
       const row = new TrainingEngagement({
         user: req.user.id,
+        ownerSuperadminId,
+        connectionId,
+        sourcedByUserId: req.user.id,
         institutionId: req.body.institutionId,
         clientId: req.body.clientId,
         engagementTitle: req.body.engagementTitle || '',
@@ -115,9 +221,12 @@ router.post(
 // Superadmin: can update any record; employee: only their own.
 router.put('/:id', auth, async (req, res) => {
   try {
-    const filter = req.user.role === 'superadmin'
-      ? { _id: req.params.id }
-      : { _id: req.params.id, user: req.user.id };
+    const userDoc = await getUserWithConnections(req.user.id);
+    if (!userDoc) {
+      return res.status(401).json({ message: 'User not found for scope resolution' });
+    }
+
+    const filter = mergeScopeAndFilters(await buildEngagementScope(userDoc), { _id: req.params.id });
     const row = await TrainingEngagement.findOne(filter);
     if (!row) {
       return res.status(404).json({ message: 'Training engagement not found' });
@@ -138,6 +247,33 @@ router.put('/:id', auth, async (req, res) => {
         row[field] = req.body[field];
       }
     });
+
+    // Maintain strict tenancy boundaries.
+    if (req.body.connectionId !== undefined || req.body.ownerSuperadminId !== undefined) {
+      const requestedOwner = req.body.ownerSuperadminId || row.ownerSuperadminId;
+      const requestedConnection = req.body.connectionId || row.connectionId;
+
+      if (userDoc.role === 'superadmin') {
+        if (String(requestedOwner) !== String(req.user.id)) {
+          return res.status(403).json({ message: 'Cannot transfer engagement ownership to another superadmin.' });
+        }
+        row.ownerSuperadminId = req.user.id;
+        row.connectionId = requestedConnection;
+      } else if (userDoc.role === 'platform_owner') {
+        row.ownerSuperadminId = requestedOwner;
+        row.connectionId = requestedConnection;
+      } else {
+        const activeConnections = (userDoc.connections || []).filter((c) => c.isActive !== false);
+        const allowed = activeConnections.some(
+          (c) => String(c.superadminId) === String(requestedOwner) && String(c.connectionId) === String(requestedConnection)
+        );
+        if (!allowed) {
+          return res.status(403).json({ message: 'Employee cannot move engagement outside assigned connection scope.' });
+        }
+        row.ownerSuperadminId = requestedOwner;
+        row.connectionId = requestedConnection;
+      }
+    }
 
     // Replace entire trainers array if provided
     if (Array.isArray(req.body.trainers)) {
@@ -161,9 +297,12 @@ router.put('/:id', auth, async (req, res) => {
 // Superadmin: can delete any record; employee: only their own.
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const filter = req.user.role === 'superadmin'
-      ? { _id: req.params.id }
-      : { _id: req.params.id, user: req.user.id };
+    const userDoc = await getUserWithConnections(req.user.id);
+    if (!userDoc) {
+      return res.status(401).json({ message: 'User not found for scope resolution' });
+    }
+
+    const filter = mergeScopeAndFilters(await buildEngagementScope(userDoc), { _id: req.params.id });
     const row = await TrainingEngagement.findOneAndDelete(filter);
     if (!row) {
       return res.status(404).json({ message: 'Training engagement not found' });

@@ -1,5 +1,27 @@
 const mongoose = require('mongoose');
 
+const userConnectionSchema = new mongoose.Schema({
+  superadminId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true
+  },
+  connectionId: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  },
+  addedAt: {
+    type: Date,
+    default: Date.now
+  }
+}, { _id: false });
+
 const userSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -19,8 +41,16 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['superadmin', 'employee'],
+    enum: ['platform_owner', 'superadmin', 'employee'],
     default: 'employee'
+  },
+  adminCode: {
+    type: String,
+    unique: true,
+    sparse: true,
+    uppercase: true,
+    trim: true,
+    default: undefined
   },
   isVerified: {
     type: Boolean,
@@ -43,6 +73,15 @@ const userSchema = new mongoose.Schema({
     unique: true,
     sparse: true,
     default: null
+  },
+  defaultConnectionId: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  connections: {
+    type: [userConnectionSchema],
+    default: []
   },
   mobile: {
     type: String,

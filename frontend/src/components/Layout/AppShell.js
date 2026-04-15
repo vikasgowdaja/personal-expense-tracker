@@ -136,10 +136,16 @@ function Icon({ name }) {
 
 function AppShell({ user, onLogout }) {
   const navigate = useNavigate();
-  const isSuperAdmin = user?.role === 'superadmin';
-  const navItems = isSuperAdmin
+  const isPrivileged = user?.role === 'superadmin' || user?.role === 'platform_owner';
+  const navItems = isPrivileged
     ? [...BASE_NAV_ITEMS, ...SUPERADMIN_NAV_ITEMS]
     : BASE_NAV_ITEMS;
+  const roleLabel =
+    user?.role === 'platform_owner'
+      ? 'Platform Owner'
+      : user?.role === 'superadmin'
+        ? 'Super Admin'
+        : 'Employee';
   const profileInitial = user?.name?.trim()?.charAt(0)?.toUpperCase() || 'U';
   const profilePhoto = user?.profilePhoto || '';
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -167,7 +173,7 @@ function AppShell({ user, onLogout }) {
           />
         </div>
 
-        {isSuperAdmin && (
+        {isPrivileged && (
           <div style={{ padding: '4px 16px', marginBottom: '8px' }}>
             <span style={{
               display: 'inline-block',
@@ -178,7 +184,7 @@ function AppShell({ user, onLogout }) {
               fontWeight: 700,
               padding: '2px 8px',
               letterSpacing: '0.05em'
-            }}>SUPER ADMIN</span>
+            }}>{user?.role === 'platform_owner' ? 'PLATFORM OWNER' : 'SUPER ADMIN'}</span>
           </div>
         )}
 
@@ -222,7 +228,7 @@ function AppShell({ user, onLogout }) {
                 )}
                 <span className="ops-profile-chip-meta">
                   <strong>{user?.name || 'User'}</strong>
-                  <small>{isSuperAdmin ? 'Super Admin' : 'Employee'}</small>
+                  <small>{roleLabel}</small>
                 </span>
                 <span className="ops-profile-chip-caret">▾</span>
               </button>
