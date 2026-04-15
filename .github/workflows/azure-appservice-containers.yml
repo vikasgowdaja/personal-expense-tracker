@@ -1,0 +1,79 @@
+name: Azure App Service Container Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-backend:${{ github.sha }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-backend:latest
+
+      - name: Deploy Backend to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_BACKEND_NAME }}
+          images: ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-backend:${{ github.sha }}
+
+  frontend:
+    runs-on: ubuntu-latest
+    needs: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          build-args: |
+            REACT_APP_API_BASE_URL=${{ secrets.BACKEND_API_URL }}
+          tags: |
+            ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-frontend:${{ github.sha }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-frontend:latest
+
+      - name: Deploy Frontend to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_FRONTEND_NAME }}
+          images: ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-frontend:${{ github.sha }}

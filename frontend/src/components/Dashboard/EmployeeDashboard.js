@@ -35,7 +35,6 @@ function TargetGauge({ achieved, target }) {
   const pct = Math.min(100, target > 0 ? (achieved / target) * 100 : 0);
   const over = achieved > target;
   const barColor = over ? '#16a34a' : pct >= 75 ? '#2563eb' : pct >= 40 ? '#d97706' : '#dc2626';
-  const remaining = Math.max(0, target - achieved);
 
   return (
     <div style={{
@@ -48,12 +47,12 @@ function TargetGauge({ achieved, target }) {
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#111827' }}>Annual Revenue Target</h3>
-          <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#6b7280' }}>Track your progress towards the yearly goal</p>
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#111827' }}>Annual Progress</h3>
+          <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#6b7280' }}>Your engagement progress towards the yearly goal</p>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: '28px', fontWeight: 800, color: barColor }}>{pct.toFixed(1)}%</div>
-          <div style={{ fontSize: '12px', color: '#6b7280' }}>of {inr(target)}</div>
+          <div style={{ fontSize: '12px', color: '#6b7280' }}>of annual target</div>
         </div>
       </div>
 
@@ -64,22 +63,15 @@ function TargetGauge({ achieved, target }) {
           width: `${pct}%`,
           background: `linear-gradient(90deg, ${barColor}cc, ${barColor})`,
           borderRadius: 999,
-          transition: 'width 0.8s ease',
-          position: 'relative'
-        }}>
-          {pct > 12 && (
-            <span style={{ position: 'absolute', right: 8, top: 0, lineHeight: '18px', fontSize: '11px', fontWeight: 700, color: '#fff' }}>
-              {inr(achieved)}
-            </span>
-          )}
-        </div>
+          transition: 'width 0.8s ease'
+        }} />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
         <span style={{ color: barColor, fontWeight: 600 }}>
-          {over ? `🎉 Target exceeded by ${inr(achieved - target)}!` : `${inr(remaining)} more to reach target`}
+          {over ? '🎉 Target exceeded!' : `${(100 - pct).toFixed(1)}% remaining`}
         </span>
-        <span style={{ color: '#6b7280' }}>Target: {inr(target)}</span>
+        <span style={{ color: '#6b7280' }}>{pct.toFixed(1)}% complete</span>
       </div>
     </div>
   );
@@ -145,9 +137,7 @@ function StatusBadge({ status }) {
 // ── Main Component ───────────────────────────────────────────────────────────
 
 function EmployeeDashboard({ user }) {
-  const [target, setTarget] = useState(ANNUAL_TARGET);
-  const [editingTarget, setEditingTarget] = useState(false);
-  const [targetInput, setTargetInput] = useState(String(ANNUAL_TARGET));
+  const [target] = useState(ANNUAL_TARGET);
   const [activeTab, setActiveTab] = useState('engagements');
 
   const allEngagements = useMemo(() => {
@@ -240,37 +230,11 @@ function EmployeeDashboard({ user }) {
       {/* Target gauge */}
       <TargetGauge achieved={yearRevenue} target={target} />
 
-      {/* Target edit */}
-      <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 10 }}>
-        {editingTarget ? (
-          <>
-            <span style={{ fontSize: '13px', color: '#374151' }}>Annual target (₹):</span>
-            <input
-              type="text"
-              value={targetInput}
-              onChange={e => setTargetInput(e.target.value)}
-              style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: '14px', width: 130 }}
-              onKeyDown={e => e.key === 'Enter' && saveTarget()}
-              autoFocus
-            />
-            <button onClick={saveTarget} style={{ padding: '4px 12px', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Save</button>
-            <button onClick={() => setEditingTarget(false)} style={{ padding: '4px 12px', borderRadius: 6, background: '#f3f4f6', color: '#374151', border: 'none', cursor: 'pointer', fontSize: '13px' }}>Cancel</button>
-          </>
-        ) : (
-          <button
-            onClick={() => { setTargetInput(String(target)); setEditingTarget(true); }}
-            style={{ padding: '4px 14px', borderRadius: 6, background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '13px' }}
-          >
-            ✏️ Edit Target
-          </button>
-        )}
-      </div>
-
       {/* Quick stat tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 32 }}>
         <StatTile label="Total Engagements" value={engagements.length} accent="blue" />
-        <StatTile label="Paid by Orgs" value={paidEngagements.length} sub={inr(paidEngagements.reduce((s,e) => s+parseNet(e), 0))} accent="green" />
-        <StatTile label="Awaiting Payment" value={pendingEngagements.length} sub={inr(pendingEngagements.reduce((s,e) => s+parseNet(e), 0))} accent="orange" />
+        <StatTile label="Paid by Orgs" value={paidEngagements.length} accent="green" />
+        <StatTile label="Awaiting Payment" value={pendingEngagements.length} accent="orange" />
         <StatTile label="Colleges" value={uniqueColleges.length} accent="purple" />
         <StatTile label="Trainers" value={trainers.length} accent="blue" />
         <StatTile label="Topics" value={uniqueTopics.length} accent="green" />
@@ -306,7 +270,7 @@ function EmployeeDashboard({ user }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ background: '#f9fafb' }}>
-                {['#', 'College', 'Organization', 'Topic', 'Trainer', 'Dates', 'Net Billed', 'Org Payment'].map(h => (
+                {['#', 'College', 'Organization', 'Topic', 'Trainer', 'Dates', 'Org Payment'].map(h => (
                   <th key={h} style={{ padding: '10px 12px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -325,12 +289,11 @@ function EmployeeDashboard({ user }) {
                     {e.startDate ? new Date(e.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}
                     {e.endDate && e.endDate !== e.startDate ? ` – ${new Date(e.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}` : (e.startDate ? ` ${new Date(e.startDate).getFullYear()}` : '')}
                   </td>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#0ea5e9' }}>{inr(parseNet(e))}</td>
                   <td style={{ padding: '10px 12px' }}><StatusBadge status={e.paymentStatus || 'Invoiced'} /></td>
                 </tr>
               ))}
               {engagements.length === 0 && (
-                <tr><td colSpan={8} style={{ padding: '32px', textAlign: 'center', color: '#9ca3af' }}>No engagements yet. Add one from Training Engagements.</td></tr>
+                <tr><td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: '#9ca3af' }}>No engagements yet. Add one from Training Engagements.</td></tr>
               )}
             </tbody>
           </table>
@@ -344,12 +307,10 @@ function EmployeeDashboard({ user }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
             {uniqueColleges.map(college => {
               const count = engagements.filter(e => e.college === college).length;
-              const revenue = engagements.filter(e => e.college === college).reduce((s, e) => s + parseNet(e), 0);
               return (
                 <div key={college} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                   <div style={{ fontWeight: 700, fontSize: '14px', color: '#1d4ed8', marginBottom: 6 }}>{college}</div>
                   <div style={{ fontSize: '13px', color: '#6b7280' }}>{count} engagement{count !== 1 ? 's' : ''}</div>
-                  <div style={{ fontSize: '13px', color: '#0ea5e9', fontWeight: 600, marginTop: 4 }}>{inr(revenue)} billed</div>
                 </div>
               );
             })}
@@ -366,7 +327,7 @@ function EmployeeDashboard({ user }) {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#f9fafb' }}>
-                  {['#', 'Name', 'Specialization', 'Rate / Day', 'Engagements'].map(h => (
+                  {['#', 'Name', 'Specialization', 'Engagements'].map(h => (
                     <th key={h} style={{ padding: '10px 12px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>{h}</th>
                   ))}
                 </tr>
@@ -379,7 +340,6 @@ function EmployeeDashboard({ user }) {
                       <td style={{ padding: '10px 12px', color: '#9ca3af' }}>{i + 1}</td>
                       <td style={{ padding: '10px 12px', fontWeight: 600 }}>{t.name || '—'}</td>
                       <td style={{ padding: '10px 12px', color: '#6b7280' }}>{t.specialization || t.expertise || t.skills || '—'}</td>
-                      <td style={{ padding: '10px 12px', color: '#0ea5e9', fontWeight: 600 }}>{t.ratePerDay ? inr(t.ratePerDay) : '—'}</td>
                       <td style={{ padding: '10px 12px' }}>
                         <span style={{ background: '#ede9fe', color: '#6d28d9', borderRadius: 4, padding: '2px 8px', fontSize: '12px', fontWeight: 600 }}>{tEngagements}</span>
                       </td>
@@ -387,7 +347,7 @@ function EmployeeDashboard({ user }) {
                   );
                 })}
                 {trainers.length === 0 && (
-                  <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#9ca3af' }}>No trainers added yet.</td></tr>
+                  <tr><td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: '#9ca3af' }}>No trainers added yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -418,12 +378,10 @@ function EmployeeDashboard({ user }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
             {uniqueOrgs.map(org => {
               const count = engagements.filter(e => e.organization === org).length;
-              const revenue = engagements.filter(e => e.organization === org).reduce((s, e) => s + parseNet(e), 0);
               return (
                 <div key={org} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                   <div style={{ fontWeight: 700, fontSize: '14px', color: '#92400e', marginBottom: 6 }}>{org}</div>
                   <div style={{ fontSize: '13px', color: '#6b7280' }}>{count} engagement{count !== 1 ? 's' : ''}</div>
-                  <div style={{ fontSize: '13px', color: '#0ea5e9', fontWeight: 600, marginTop: 4 }}>{inr(revenue)} billed</div>
                 </div>
               );
             })}

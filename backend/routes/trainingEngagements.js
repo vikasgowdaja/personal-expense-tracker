@@ -7,10 +7,13 @@ const router = express.Router();
 
 const STATUS_FLOW = ['Planned', 'Ongoing', 'Completed', 'Invoiced', 'Paid'];
 
-// ── GET all engagements for the current user ──
+// ── GET all engagements ──
+// Superadmin: sees ALL records across all users.
+// Employee: sees only their own.
 router.get('/', auth, async (req, res) => {
   try {
-    const query = { user: req.user.id };
+    // Superadmins can see every engagement; employees only their own
+    const query = req.user.role === 'superadmin' ? {} : { user: req.user.id };
     if (req.query.status) {
       query.status = req.query.status;
     }
@@ -35,9 +38,14 @@ router.get('/', auth, async (req, res) => {
 });
 
 // ── GET single engagement ──
+// Superadmin: can retrieve any record; employee: only their own.
 router.get('/:id', auth, async (req, res) => {
   try {
-    const row = await TrainingEngagement.findOne({ _id: req.params.id, user: req.user.id })
+    const filter = req.user.role === 'superadmin'
+      ? { _id: req.params.id }
+      : { _id: req.params.id, user: req.user.id };
+
+    const row = await TrainingEngagement.findOne(filter)
       .populate('institutionId', 'name location contactPerson contactEmail contactPhone')
       .populate('clientId', 'name contactPerson email phone billingAddress')
       .populate('trainers.trainerId', 'fullName email phone yearsOfExperience specialization');
@@ -89,7 +97,9 @@ router.post(
           dailyRate: Number(t.dailyRate || 0)
         })),
         status: req.body.status || 'Planned',
-        notes: req.body.notes || ''
+        notes: req.body.notes || '',
+        sourcedBy: req.body.sourcedBy || '',
+        sourcedByName: req.body.sourcedByName || ''
       });
 
       const saved = await row.save();
@@ -102,9 +112,13 @@ router.post(
 );
 
 // ── PUT update engagement ──
+// Superadmin: can update any record; employee: only their own.
 router.put('/:id', auth, async (req, res) => {
   try {
-    const row = await TrainingEngagement.findOne({ _id: req.params.id, user: req.user.id });
+    const filter = req.user.role === 'superadmin'
+      ? { _id: req.params.id }
+      : { _id: req.params.id, user: req.user.id };
+    const row = await TrainingEngagement.findOne(filter);
     if (!row) {
       return res.status(404).json({ message: 'Training engagement not found' });
     }
@@ -118,7 +132,7 @@ router.put('/:id', auth, async (req, res) => {
       }
     }
 
-    const scalarFields = ['institutionId', 'clientId', 'engagementTitle', 'startDate', 'endDate', 'status', 'notes'];
+    const scalarFields = ['institutionId', 'clientId', 'engagementTitle', 'startDate', 'endDate', 'status', 'notes', 'sourcedBy', 'sourcedByName'];
     scalarFields.forEach((field) => {
       if (req.body[field] !== undefined) {
         row[field] = req.body[field];
@@ -144,9 +158,13 @@ router.put('/:id', auth, async (req, res) => {
 });
 
 // ── DELETE engagement ──
+// Superadmin: can delete any record; employee: only their own.
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const row = await TrainingEngagement.findOneAndDelete({ _id: req.params.id, user: req.user.id });
+    const filter = req.user.role === 'superadmin'
+      ? { _id: req.params.id }
+      : { _id: req.params.id, user: req.user.id };
+    const row = await TrainingEngagement.findOneAndDelete(filter);
     if (!row) {
       return res.status(404).json({ message: 'Training engagement not found' });
     }

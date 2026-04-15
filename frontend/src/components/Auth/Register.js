@@ -54,7 +54,7 @@ function Register({ onLogin }) {
     setLoading(true);
     try {
       const res = await authAPI.verifyEmail({ email: formData.email, otp });
-      onLogin(res.data.token, res.data.user);
+      onLogin(res.data.token, res.data.user, res.data.refreshToken);
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Verification failed');

@@ -262,4 +262,54 @@ router.get("/user", auth, async (req, res) => {
   }
 });
 
+// ─── UPDATE CURRENT USER PROFILE ─────────────────────────────────────────────
+
+router.put(
+  "/user",
+  auth,
+  [
+    body("email").optional().isEmail().withMessage("Please include a valid email"),
+    body("mobile")
+      .optional()
+      .isLength({ min: 7, max: 20 })
+      .withMessage("Mobile number length should be between 7 and 20"),
+    body("profilePhoto").optional().isString(),
+    body("name").optional().not().isEmpty().withMessage("Name cannot be empty")
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    // Security: Reject attempts to modify role
+    if (req.body.role !== undefined) {
+      return res.status(403).json({ message: "Role cannot be modified" });
+    }
+
+    try {
+      const user = await User.findById(req.user.id);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      if (req.body.email && req.body.email.toLowerCase() !== user.email.toLowerCase()) {
+        const existing = await User.findOne({ email: req.body.email.toLowerCase() });
+        if (existing && existing.id !== user.id) {
+          return res.status(400).json({ message: "Email already in use" });
+        }
+        user.email = req.body.email.toLowerCase().trim();
+      }
+
+      if (req.body.name !== undefined) user.name = req.body.name.trim();
+      if (req.body.mobile !== undefined) user.mobile = String(req.body.mobile || '').trim();
+      if (req.body.profilePhoto !== undefined) user.profilePhoto = String(req.body.profilePhoto || '').trim();
+
+      await user.save();
+
+      const safeUser = await User.findById(req.user.id).select("-password -otp -otpExpires -refreshToken");
+      res.json(safeUser);
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).send("Server error");
+    }
+  }
+);
+
 module.exports = router;

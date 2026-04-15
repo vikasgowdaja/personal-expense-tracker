@@ -553,7 +553,14 @@ export default function Payments() {
     if (row.sourceType === 'training') {
       updateTrainingRecords((records) => records.map((item) => (
         item.id === row.trainingRecordId
-          ? { ...item, paymentStatus: nextStatus }
+          ? {
+              ...item,
+              paymentStatus: nextStatus,
+              paidDate:
+                nextStatus === 'Paid'
+                  ? (item.paidDate || new Date().toISOString().slice(0, 10))
+                  : ''
+            }
           : item
       )));
       return;

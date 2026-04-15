@@ -6,7 +6,6 @@ import Register from './components/Auth/Register';
 import Dashboard from './components/Dashboard/Dashboard';
 import EmployeeDashboard from './components/Dashboard/EmployeeDashboard';
 import ExpenseList from './components/Expenses/ExpenseList';
-import AddExpense from './components/Expenses/AddExpense';
 import UploadReceipt from './components/Expenses/UploadReceipt';
 import AppShell from './components/Layout/AppShell';
 import Payments from './components/Payments/Payments';
@@ -33,16 +32,79 @@ function App() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
-    if (token && savedUser) {
-      setIsAuthenticated(true);
-      setUser(JSON.parse(savedUser));
-    }
-    setLoading(false);
+    const refreshToken = localStorage.getItem('refreshToken');
+
+    const restoreSession = async () => {
+      if (token && savedUser) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          if (payload.exp && payload.exp * 1000 > Date.now()) {
+            // Valid access token — restore immediately
+            setIsAuthenticated(true);
+            setUser(JSON.parse(savedUser));
+            setLoading(false);
+            return;
+          }
+        } catch {
+          // Corrupt token — fall through to refresh attempt
+        }
+      }
+
+      // Access token missing or expired — try refresh token silently
+      if (refreshToken) {
+        try {
+          const res = await authAPI.refresh({ refreshToken });
+          const { token: newToken, refreshToken: newRefresh } = res.data;
+          localStorage.setItem('token', newToken);
+          if (newRefresh) localStorage.setItem('refreshToken', newRefresh);
+
+          // Fetch fresh user profile with the new token
+          const { default: axios } = await import('axios');
+          const userRes = await axios.get('/api/auth/user', {
+            headers: { 'x-auth-token': newToken }
+          });
+          const freshUser = userRes.data;
+          localStorage.setItem('user', JSON.stringify({
+            id: freshUser._id,
+            name: freshUser.name,
+            email: freshUser.email,
+            role: freshUser.role,
+            employeeId: freshUser.employeeId,
+            mobile: freshUser.mobile,
+            profilePhoto: freshUser.profilePhoto
+          }));
+          setUser({
+            id: freshUser._id,
+            name: freshUser.name,
+            email: freshUser.email,
+            role: freshUser.role,
+            employeeId: freshUser.employeeId,
+            mobile: freshUser.mobile,
+            profilePhoto: freshUser.profilePhoto
+          });
+          setIsAuthenticated(true);
+        } catch {
+          // Refresh also failed — clear everything and go to login
+          localStorage.removeItem('token');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
+        }
+      } else {
+        // No tokens at all — clear stale user data
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+
+      setLoading(false);
+    };
+
+    restoreSession();
   }, []);
 
-  const handleLogin = (token, userData) => {
+  const handleLogin = (token, userData, refreshToken) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(userData));
+    if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
     setIsAuthenticated(true);
     setUser(userData);
   };
@@ -50,6 +112,7 @@ function App() {
   const handleLogout = async () => {
     try { await authAPI.logout(); } catch (_) {}
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     setIsAuthenticated(false);
     setUser(null);
@@ -81,9 +144,38 @@ function App() {
               element={user?.role === 'superadmin' ? <Dashboard user={user} /> : <EmployeeDashboard user={user} />}
             />
             <Route path="calendar" element={<CalendarHub />} />
-            <Route path="finance" element={<Payments />} />
-            <Route path="trainer-settlements" element={<TrainersSettlement />} />
-            <Route path="expenses" element={<ExpenseList />} />
+            <Route
+              path="finance"
+              element={
+                <ProtectedRoute user={user} requiredRole="superadmin">
+                  <Payments />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="trainer-settlements"
+              element={
+                <ProtectedRoute user={user} requiredRole="superadmin">
+                  <TrainersSettlement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="expenses"
+              element={
+                <ProtectedRoute user={user} requiredRole="superadmin">
+                  <ExpenseList />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="upload-receipt"
+              element={
+                <ProtectedRoute user={user} requiredRole="superadmin">
+                  <UploadReceipt />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="insights"
               element={
@@ -93,8 +185,6 @@ function App() {
               }
             />
             <Route path="profile" element={<Profile />} />
-            <Route path="add-expense" element={<AddExpense />} />
-            <Route path="upload-receipt" element={<UploadReceipt />} />
             <Route
               path="teaching"
               element={<Navigate to="/training-engagements" replace />}

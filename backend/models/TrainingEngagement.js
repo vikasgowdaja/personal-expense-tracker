@@ -94,6 +94,17 @@ const trainingEngagementSchema = new mongoose.Schema({
     trim: true,
     default: ''
   },
+  // ── Who sourced / created this engagement (employeeId or admin name) ──
+  sourcedBy: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  sourcedByName: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   createdAt: {
     type: Date,
     default: Date.now

@@ -148,6 +148,9 @@ function TrainingEngagementsHub({ user }) {
     if (user?.employeeId) {
       base.sourcedBy = user.employeeId;
       base.sourcedByName = user.name || '';
+    } else if (user?.name) {
+      base.sourcedBy = user.name;
+      base.sourcedByName = user.name;
     }
     return base;
   });
@@ -168,6 +171,11 @@ function TrainingEngagementsHub({ user }) {
   const [filterOrganization, setFilterOrganization] = useState('');
   const [filterTrainer, setFilterTrainer] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+
+  // ── Bulk selection state ──
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkSourcedBy, setBulkSourcedBy] = useState('');
+  const [bulkSourcedByName, setBulkSourcedByName] = useState('');
 
   const persist = (next) => {
     localStorage.setItem('training_engagements', JSON.stringify(next));
@@ -331,6 +339,12 @@ function TrainingEngagementsHub({ user }) {
       totalAmount: netAmount,
       notes: form.notes,
       paymentStatus: form.paymentStatus,
+      paidDate:
+        form.paymentStatus === 'Paid'
+          ? (editId
+              ? engagements.find((x) => x.id === editId)?.paidDate || new Date().toISOString().slice(0, 10)
+              : new Date().toISOString().slice(0, 10))
+          : '',
       sourcedBy: form.sourcedBy || '',
       sourcedByName: form.sourcedByName || '',
       createdAt: editId
@@ -357,6 +371,9 @@ function TrainingEngagementsHub({ user }) {
     if (user?.employeeId) {
       base.sourcedBy = user.employeeId;
       base.sourcedByName = user.name || '';
+    } else if (user?.name) {
+      base.sourcedBy = user.name;
+      base.sourcedByName = user.name;
     }
     setForm(base);
     setEditId('');
@@ -388,8 +405,8 @@ function TrainingEngagementsHub({ user }) {
       notes: row.notes || '',
       tdsApplicable: row.tdsApplicable !== false,
       paymentStatus: row.paymentStatus || 'Invoiced',
-      sourcedBy: row.sourcedBy || '',
-      sourcedByName: row.sourcedByName || ''
+      sourcedBy: row.sourcedBy || user?.employeeId || user?.name || '',
+      sourcedByName: row.sourcedByName || user?.name || ''
     });
 
     const pivotDate = row.startDate || row.selectedDates?.[0] || TODAY_KEY;
@@ -406,45 +423,98 @@ function TrainingEngagementsHub({ user }) {
     persist(engagements.filter((x) => x.id !== id));
   };
 
+  const toggleSelectId = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (ids) => {
+    setSelectedIds((prev) => {
+      if (ids.every((id) => prev.has(id))) {
+        const next = new Set(prev);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      }
+      return new Set([...prev, ...ids]);
+    });
+  };
+
+  const handleBulkAssign = () => {
+    if (!bulkSourcedBy.trim()) {
+      window.alert('Please choose an employee / admin to assign.');
+      return;
+    }
+    if (selectedIds.size === 0) {
+      window.alert('Please select at least one record.');
+      return;
+    }
+    const next = engagements.map((x) =>
+      selectedIds.has(x.id)
+        ? { ...x, sourcedBy: bulkSourcedBy.trim(), sourcedByName: bulkSourcedByName.trim() }
+        : x
+    );
+    persist(next);
+    setSelectedIds(new Set());
+    setBulkSourcedBy('');
+    setBulkSourcedByName('');
+  };
+
   const handleCancel = () => {
     setEditId('');
     const base = { ...EMPTY_FORM };
     if (user?.employeeId) {
       base.sourcedBy = user.employeeId;
       base.sourcedByName = user.name || '';
+    } else if (user?.name) {
+      base.sourcedBy = user.name;
+      base.sourcedByName = user.name;
     }
     setForm(base);
     const now = new Date();
     setPickerMonth(new Date(now.getFullYear(), now.getMonth(), 1));
   };
 
+  // ── Ownership filter: employees only see their own records ──
+  const visibleEngagements = useMemo(() => {
+    if (user?.role === 'superadmin') return engagements;
+    // Employee: match by employeeId (preferred) or name
+    const myId = user?.employeeId || user?.name || '';
+    if (!myId) return [];
+    return engagements.filter(
+      (x) => x.sourcedBy === myId || x.sourcedByName === user?.name
+    );
+  }, [engagements, user]);
+
   const stats = useMemo(() => {
-    const totalDays = engagements.reduce((s, x) => s + Number(x.totalDays || 0), 0);
-    const totalGross = engagements.reduce((s, x) => s + getGrossAmount(x), 0);
-    const totalTds = engagements.reduce((s, x) => s + getTdsAmount(x), 0);
-    const totalAmount = engagements.reduce((s, x) => s + getNetAmount(x), 0);
-    const paid = engagements
+    const totalDays = visibleEngagements.reduce((s, x) => s + Number(x.totalDays || 0), 0);
+    const totalGross = visibleEngagements.reduce((s, x) => s + getGrossAmount(x), 0);
+    const totalTds = visibleEngagements.reduce((s, x) => s + getTdsAmount(x), 0);
+    const totalAmount = visibleEngagements.reduce((s, x) => s + getNetAmount(x), 0);
+    const paid = visibleEngagements
       .filter((x) => (x.paymentStatus || '').toLowerCase() === 'paid')
       .reduce((s, x) => s + getNetAmount(x), 0);
     return {
-      total: engagements.length,
+      total: visibleEngagements.length,
       totalDays,
       totalGross,
       totalTds,
       totalAmount,
       pending: totalAmount - paid
     };
-  }, [engagements]);
+  }, [visibleEngagements]);
 
   const filtered = useMemo(() => {
-    return engagements.filter((x) => {
+    return visibleEngagements.filter((x) => {
       if (filterCollege && x.college !== filterCollege) return false;
       if (filterOrganization && x.organization !== filterOrganization) return false;
       if (filterTrainer && x.trainerId !== filterTrainer) return false;
       if (filterStatus && x.paymentStatus !== filterStatus) return false;
       return true;
     });
-  }, [engagements, filterCollege, filterOrganization, filterTrainer, filterStatus]);
+  }, [visibleEngagements, filterCollege, filterOrganization, filterTrainer, filterStatus]);
 
   const calendarCells = useMemo(() => {
     const start = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth(), 1);
@@ -480,7 +550,21 @@ function TrainingEngagementsHub({ user }) {
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button className={`btn ${activeTab === 'overview' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setActiveTab('overview')}>Overview</button>
-          <button className={`btn ${activeTab === 'log' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setActiveTab('log'); setEditId(''); setForm(EMPTY_FORM); setPickerMonth(new Date()); refreshLookups(); }}>{editId ? 'Editing...' : '+ Add Engagement'}</button>
+          <button className={`btn ${activeTab === 'log' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => {
+            setActiveTab('log');
+            setEditId('');
+            const base = { ...EMPTY_FORM };
+            if (user?.employeeId) {
+              base.sourcedBy = user.employeeId;
+              base.sourcedByName = user.name || '';
+            } else if (user?.name) {
+              base.sourcedBy = user.name;
+              base.sourcedByName = user.name;
+            }
+            setForm(base);
+            setPickerMonth(new Date());
+            refreshLookups();
+          }}>{editId ? 'Editing...' : '+ Add Engagement'}</button>
           <button className={`btn ${activeTab === 'records' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setActiveTab('records')}>Records</button>
         </div>
       </div>
@@ -488,9 +572,13 @@ function TrainingEngagementsHub({ user }) {
       <div className="summary-cards">
         <div className="ops-card summary-card teaching-stat-card"><div className="stat-value">{stats.total}</div><div className="stat-label">Total Engagements</div></div>
         <div className="ops-card summary-card teaching-stat-card accent-blue"><div className="stat-value">{stats.totalDays}</div><div className="stat-label">Total Days</div></div>
-        <div className="ops-card summary-card teaching-stat-card accent-green"><div className="stat-value">{toInr(stats.totalGross)}</div><div className="stat-label">Gross Value</div></div>
-        <div className="ops-card summary-card teaching-stat-card"><div className="stat-value">{toInr(stats.totalTds)}</div><div className="stat-label">Total TDS</div></div>
-        <div className="ops-card summary-card teaching-stat-card accent-purple"><div className="stat-value">{toInr(stats.pending)}</div><div className="stat-label">Pending</div></div>
+        {user?.role === 'superadmin' && (
+          <>
+            <div className="ops-card summary-card teaching-stat-card accent-green"><div className="stat-value">{toInr(stats.totalGross)}</div><div className="stat-label">Gross Value</div></div>
+            <div className="ops-card summary-card teaching-stat-card"><div className="stat-value">{toInr(stats.totalTds)}</div><div className="stat-label">Total TDS</div></div>
+            <div className="ops-card summary-card teaching-stat-card accent-purple"><div className="stat-value">{toInr(stats.pending)}</div><div className="stat-label">Pending</div></div>
+          </>
+        )}
       </div>
 
       {activeTab === 'log' && (
@@ -621,17 +709,21 @@ function TrainingEngagementsHub({ user }) {
                 <input className="form-control" type="number" min="0" value={form.learners} onChange={(e) => handleField('learners', e.target.value)} />
               </div>
 
-              <div className="form-group">
-                <label>Rate Per Day (INR)</label>
-                <input className="form-control" type="number" min="0" value={form.ratePerDay} onChange={(e) => handleField('ratePerDay', e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label>TDS Handling</label>
-                <select className="form-control" value={form.tdsApplicable ? 'yes' : 'no'} onChange={(e) => handleField('tdsApplicable', e.target.value === 'yes')}>
-                  <option value="yes">Deduct 10% TDS (default)</option>
-                  <option value="no">Ignore TDS for this payment</option>
-                </select>
-              </div>
+              {user?.role === 'superadmin' && (
+                <div className="form-group">
+                  <label>Rate Per Day (INR)</label>
+                  <input className="form-control" type="number" min="0" value={form.ratePerDay} onChange={(e) => handleField('ratePerDay', e.target.value)} />
+                </div>
+              )}
+              {user?.role === 'superadmin' && (
+                <div className="form-group">
+                  <label>TDS Handling</label>
+                  <select className="form-control" value={form.tdsApplicable ? 'yes' : 'no'} onChange={(e) => handleField('tdsApplicable', e.target.value === 'yes')}>
+                    <option value="yes">Deduct 10% TDS (default)</option>
+                    <option value="no">Ignore TDS for this payment</option>
+                  </select>
+                </div>
+              )}
               <div className="form-group">
                 <label>Payment Status</label>
                 <select className="form-control" value={form.paymentStatus} onChange={(e) => handleField('paymentStatus', e.target.value)}>
@@ -650,12 +742,20 @@ function TrainingEngagementsHub({ user }) {
                     className="form-control"
                     value={form.sourcedBy}
                     onChange={(e) => {
-                      const emp = employeeOptions.find(x => x.employeeId === e.target.value);
-                      handleField('sourcedBy', e.target.value);
-                      handleField('sourcedByName', emp ? emp.name : '');
+                      if (e.target.value === '__self') {
+                        handleField('sourcedBy', user?.employeeId || user?.name || '');
+                        handleField('sourcedByName', user?.name || '');
+                      } else {
+                        const emp = employeeOptions.find(x => (x.employeeId || x._id) === e.target.value);
+                        handleField('sourcedBy', e.target.value);
+                        handleField('sourcedByName', emp ? emp.name : '');
+                      }
                     }}
                   >
                     <option value="">-- Unassigned --</option>
+                    <option value="__self">
+                      {user?.employeeId ? `${user.employeeId} — ${user.name} (You)` : `${user?.name || 'Admin'} (You — Admin)`}
+                    </option>
                     {employeeOptions.map((emp) => (
                       <option key={emp._id} value={emp.employeeId || emp._id}>
                         {emp.employeeId ? `${emp.employeeId} — ${emp.name}` : emp.name}
@@ -665,10 +765,10 @@ function TrainingEngagementsHub({ user }) {
                 ) : (
                   <input
                     className="form-control"
-                    placeholder={user?.employeeId ? `${user.employeeId} (you)` : 'Employee ID (e.g. VIK001)'}
+                    placeholder={user?.employeeId ? `${user.employeeId} (you)` : user?.name ? `${user.name} (you)` : 'Employee ID (e.g. VIK001)'}
                     value={form.sourcedBy}
                     onChange={(e) => handleField('sourcedBy', e.target.value)}
-                    readOnly={!!user?.employeeId}
+                    readOnly={!!(user?.employeeId || user?.name)}
                   />
                 )}
                 {form.sourcedByName && (
@@ -684,6 +784,7 @@ function TrainingEngagementsHub({ user }) {
               <textarea className="form-control" rows={3} value={form.notes} onChange={(e) => handleField('notes', e.target.value)} />
             </div>
 
+{user?.role === 'superadmin' && (
             <div style={{ marginBottom: '0.9rem', fontSize: '0.84rem', color: 'var(--ops-text-secondary)' }}>
               {(() => {
                 const totalDays = getTotalDays(form);
@@ -693,6 +794,7 @@ function TrainingEngagementsHub({ user }) {
                 return `Gross: ${toInr(gross)} | TDS: ${toInr(tds)} | Net Payable: ${toInr(net)}`;
               })()}
             </div>
+            )}
 
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button className="btn btn-primary" type="submit">{editId ? 'Update Engagement' : 'Save Engagement'}</button>
@@ -708,15 +810,15 @@ function TrainingEngagementsHub({ user }) {
             <h3 style={{ margin: 0 }}>All Engagement Records</h3>
             <select className="form-control" style={{ width: 'auto', minWidth: '180px' }} value={filterCollege} onChange={(e) => setFilterCollege(e.target.value)}>
               <option value="">All Colleges</option>
-              {[...new Set(engagements.map((x) => x.college))].map((x) => <option key={x} value={x}>{x}</option>)}
+              {[...new Set(visibleEngagements.map((x) => x.college))].map((x) => <option key={x} value={x}>{x}</option>)}
             </select>
             <select className="form-control" style={{ width: 'auto', minWidth: '180px' }} value={filterOrganization} onChange={(e) => setFilterOrganization(e.target.value)}>
               <option value="">All Organizations</option>
-              {[...new Set(engagements.map((x) => x.organization))].map((x) => <option key={x} value={x}>{x}</option>)}
+              {[...new Set(visibleEngagements.map((x) => x.organization))].map((x) => <option key={x} value={x}>{x}</option>)}
             </select>
             <select className="form-control" style={{ width: 'auto', minWidth: '180px' }} value={filterTrainer} onChange={(e) => setFilterTrainer(e.target.value)}>
               <option value="">All Trainers</option>
-              {[...new Map(engagements.filter((x) => x.trainerId).map((x) => [x.trainerId, x.trainerName || x.trainerId])).entries()].map(([id, name]) => (
+              {[...new Map(visibleEngagements.filter((x) => x.trainerId).map((x) => [x.trainerId, x.trainerName || x.trainerId])).entries()].map(([id, name]) => (
                 <option key={id} value={id}>{name}</option>
               ))}
             </select>
@@ -724,8 +826,71 @@ function TrainingEngagementsHub({ user }) {
               <option value="">All Status</option>
               {['Planned', 'Ongoing', 'Completed', 'Invoiced', 'Paid'].map((x) => <option key={x} value={x}>{x}</option>)}
             </select>
-            <span style={{ fontSize: '0.85rem', color: 'var(--ops-text-secondary)' }}>{filtered.length} of {engagements.length}</span>
+            <span style={{ fontSize: '0.85rem', color: 'var(--ops-text-secondary)' }}>{filtered.length} of {visibleEngagements.length}</span>
           </div>
+
+          {/* ── Bulk action bar ── */}
+          {selectedIds.size > 0 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap',
+              background: '#ede9fe', border: '1.5px solid #7c3aed', borderRadius: '8px',
+              padding: '0.65rem 1rem', marginBottom: '1rem'
+            }}>
+              <span style={{ fontWeight: 600, color: '#7c3aed', fontSize: '0.88rem' }}>
+                {selectedIds.size} record{selectedIds.size > 1 ? 's' : ''} selected
+              </span>
+              <span style={{ fontSize: '0.85rem', color: '#4b5563' }}>Assign Sourced By:</span>
+              {employeeOptions.length > 0 ? (
+                <select
+                  className="form-control"
+                  style={{ width: 'auto', minWidth: '220px' }}
+                  value={bulkSourcedBy}
+                  onChange={(e) => {
+                    if (e.target.value === '__self') {
+                      setBulkSourcedBy(user?.employeeId || user?.name || '');
+                      setBulkSourcedByName(user?.name || '');
+                    } else {
+                      const emp = employeeOptions.find((x) => (x.employeeId || x._id) === e.target.value);
+                      setBulkSourcedBy(e.target.value);
+                      setBulkSourcedByName(emp ? emp.name : '');
+                    }
+                  }}
+                >
+                  <option value="">-- Select --</option>
+                  <option value="__self">
+                    {user?.employeeId ? `${user.employeeId} — ${user.name} (You)` : `${user?.name || 'Admin'} (You)`}
+                  </option>
+                  {employeeOptions.map((emp) => (
+                    <option key={emp._id} value={emp.employeeId || emp._id}>
+                      {emp.employeeId ? `${emp.employeeId} — ${emp.name}` : emp.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="form-control"
+                  style={{ width: '180px' }}
+                  placeholder="Employee ID or name"
+                  value={bulkSourcedBy}
+                  onChange={(e) => setBulkSourcedBy(e.target.value)}
+                />
+              )}
+              <button
+                className="btn btn-primary"
+                style={{ padding: '5px 14px', fontSize: '0.82rem' }}
+                onClick={handleBulkAssign}
+              >
+                Apply to {selectedIds.size} record{selectedIds.size > 1 ? 's' : ''}
+              </button>
+              <button
+                className="btn btn-secondary"
+                style={{ padding: '5px 10px', fontSize: '0.82rem' }}
+                onClick={() => { setSelectedIds(new Set()); setBulkSourcedBy(''); setBulkSourcedByName(''); }}
+              >
+                Clear Selection
+              </button>
+            </div>
+          )}
 
           {filtered.length === 0 ? (
             <p className="muted">No engagement records found.</p>
@@ -734,6 +899,14 @@ function TrainingEngagementsHub({ user }) {
               <table className="ops-table">
                 <thead>
                   <tr>
+                    <th style={{ width: '36px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        title="Select all visible"
+                        checked={filtered.length > 0 && filtered.every((x) => selectedIds.has(x.id))}
+                        onChange={() => toggleSelectAll(filtered.map((x) => x.id))}
+                      />
+                    </th>
                     <th className="sno-th">#</th>
                     <th>Topic</th>
                     <th>Trainer</th>
@@ -743,17 +916,27 @@ function TrainingEngagementsHub({ user }) {
                     <th>Date Range</th>
                     <th>Days</th>
                     <th>Hours/Day</th>
-                    <th>Rate/Day</th>
-                    <th>Gross</th>
-                    <th>TDS</th>
-                    <th>Net Payable</th>
+                    {user?.role === 'superadmin' && <th>Rate/Day</th>}
+                    {user?.role === 'superadmin' && <th>Gross</th>}
+                    {user?.role === 'superadmin' && <th>TDS</th>}
+                    {user?.role === 'superadmin' && <th>Net Payable</th>}
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((x, i) => (
-                    <tr key={x.id}>
+                    <tr
+                      key={x.id}
+                      style={selectedIds.has(x.id) ? { background: '#f5f3ff' } : {}}
+                    >
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(x.id)}
+                          onChange={() => toggleSelectId(x.id)}
+                        />
+                      </td>
                       <td className="sno-cell">{i + 1}</td>
                       <td><span className="status-pill pill-blue">{x.topic}</span></td>
                       <td>{x.trainerName || '—'}</td>
@@ -767,10 +950,10 @@ function TrainingEngagementsHub({ user }) {
                       <td style={{ whiteSpace: 'nowrap' }}>{formatDateSummary(x)}</td>
                       <td>{x.totalDays}</td>
                       <td>{x.dailyHours || '—'}</td>
-                      <td>{toInr(x.ratePerDay)}</td>
-                      <td>{toInr(getGrossAmount(x))}</td>
-                      <td>{toInr(getTdsAmount(x))}</td>
-                      <td><strong>{toInr(getNetAmount(x))}</strong></td>
+                      {user?.role === 'superadmin' && <td>{toInr(x.ratePerDay)}</td>}
+                      {user?.role === 'superadmin' && <td>{toInr(getGrossAmount(x))}</td>}
+                      {user?.role === 'superadmin' && <td>{toInr(getTdsAmount(x))}</td>}
+                      {user?.role === 'superadmin' && <td><strong>{toInr(getNetAmount(x))}</strong></td>}
                       <td><span className="status-pill pill-neutral">{x.paymentStatus || 'Invoiced'}</span></td>
                       <td style={{ whiteSpace: 'nowrap' }}>
                         <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.76rem', marginRight: '6px' }} onClick={() => handleEdit(x)}>Edit</button>
@@ -788,7 +971,7 @@ function TrainingEngagementsHub({ user }) {
       {activeTab === 'overview' && (
         <div className="ops-card" style={{ marginTop: '1.5rem' }}>
           <h3>Engagement Overview</h3>
-          {engagements.length === 0 ? (
+          {visibleEngagements.length === 0 ? (
             <p className="muted">No engagements yet. Use + Add Engagement.</p>
           ) : (
             <div style={{ overflowX: 'auto' }}>
@@ -800,27 +983,33 @@ function TrainingEngagementsHub({ user }) {
                     <th>Trainer</th>
                     <th>College</th>
                     <th>Organization</th>
+                    <th>Sourced By</th>
                     <th>Date Range</th>
                     <th>Days</th>
-                    <th>Gross</th>
-                    <th>TDS</th>
-                    <th>Net</th>
+                    {user?.role === 'superadmin' && <th>Gross</th>}
+                    {user?.role === 'superadmin' && <th>TDS</th>}
+                    {user?.role === 'superadmin' && <th>Net</th>}
                     <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {engagements.slice(0, 8).map((x, i) => (
+                  {visibleEngagements.slice(0, 8).map((x, i) => (
                     <tr key={x.id}>
                       <td className="sno-cell">{i + 1}</td>
                       <td>{x.topic}</td>
                       <td>{x.trainerName || '—'}</td>
                       <td><span className="college-cell-badge">{x.college}</span></td>
                       <td>{x.organization}</td>
+                      <td style={{ whiteSpace: 'nowrap', fontSize: '0.82rem' }}>
+                        {x.sourcedBy ? (
+                          <span title={x.sourcedByName || x.sourcedBy} style={{ fontWeight: 600, color: '#7c3aed' }}>{x.sourcedBy}</span>
+                        ) : '—'}
+                      </td>
                       <td style={{ whiteSpace: 'nowrap' }}>{formatDateSummary(x)}</td>
                       <td>{x.totalDays}</td>
-                      <td>{toInr(getGrossAmount(x))}</td>
-                      <td>{toInr(getTdsAmount(x))}</td>
-                      <td>{toInr(getNetAmount(x))}</td>
+                      {user?.role === 'superadmin' && <td>{toInr(getGrossAmount(x))}</td>}
+                      {user?.role === 'superadmin' && <td>{toInr(getTdsAmount(x))}</td>}
+                      {user?.role === 'superadmin' && <td>{toInr(getNetAmount(x))}</td>}
                       <td><span className="status-pill pill-neutral">{x.paymentStatus || 'Invoiced'}</span></td>
                     </tr>
                   ))}

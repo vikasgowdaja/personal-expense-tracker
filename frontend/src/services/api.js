@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = '/api';
+const API_URL = process.env.REACT_APP_API_BASE_URL || '/api';
 
 // Create axios instance
 const api = axios.create({
@@ -24,6 +24,89 @@ api.interceptors.request.use(
   }
 );
 
+// ── Auto token refresh on 401 ──────────────────────────────────────────────
+let isRefreshing = false;
+let failedQueue = [];
+
+function processQueue(error, token = null) {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+}
+
+function clearAuthAndRedirect() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('user');
+  // Navigate to login without full page reload if possible
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Only attempt refresh on 401, only once per request, skip auth endpoints
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.url.includes('/auth/refresh') &&
+      !originalRequest.url.includes('/auth/login') &&
+      !originalRequest.url.includes('/auth/login-otp')
+    ) {
+      if (isRefreshing) {
+        // Queue this request until the refresh completes
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then((token) => {
+          originalRequest.headers['x-auth-token'] = token;
+          return api(originalRequest);
+        }).catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (!refreshToken) {
+        isRefreshing = false;
+        clearAuthAndRedirect();
+        return Promise.reject(error);
+      }
+
+      try {
+        const res = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
+        const { token: newToken, refreshToken: newRefresh } = res.data;
+
+        localStorage.setItem('token', newToken);
+        if (newRefresh) localStorage.setItem('refreshToken', newRefresh);
+
+        api.defaults.headers.common['x-auth-token'] = newToken;
+        originalRequest.headers['x-auth-token'] = newToken;
+
+        processQueue(null, newToken);
+        return api(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        clearAuthAndRedirect();
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
 // Auth API
 export const authAPI = {
   register: (userData) => api.post('/auth/register', userData),
@@ -33,7 +116,8 @@ export const authAPI = {
   loginOTP: (data) => api.post('/auth/login-otp', data),
   refresh: (data) => api.post('/auth/refresh', data),
   logout: () => api.post('/auth/logout'),
-  getUser: () => api.get('/auth/user')
+  getUser: () => api.get('/auth/user'),
+  updateUser: (data) => api.put('/auth/user', data)
 };
 
 // Expense API

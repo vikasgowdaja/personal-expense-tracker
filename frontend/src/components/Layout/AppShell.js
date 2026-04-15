@@ -1,23 +1,21 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 
 const BASE_NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: 'home' },
   { to: '/calendar', label: 'Calendar', icon: 'calendar' },
-  { to: '/finance', label: 'Payments', icon: 'payments' },
-  { to: '/trainer-settlements', label: 'Trainer Settlement', icon: 'payments' },
   { to: '/training-engagements', label: 'Training Engagements', icon: 'teaching' },
   { to: '/trainers', label: 'Trainers', icon: 'trainer' },
   { to: '/topics', label: 'Topics', icon: 'topic' },
   { to: '/colleges', label: 'Colleges', icon: 'college' },
-  { to: '/organizations', label: 'Organizations', icon: 'organization' },
-  { to: '/profile', label: 'Profile', icon: 'profile' },
-  { to: '/settings', label: 'Settings', icon: 'settings' }
+  { to: '/organizations', label: 'Organizations', icon: 'organization' }
 ];
 
 const SUPERADMIN_NAV_ITEMS = [
   { to: '/insights', label: 'Insights', icon: 'insights' },
   { to: '/financial', label: 'Financial Reports', icon: 'financial' },
+  { to: '/finance', label: 'Payments', icon: 'payments' },
+  { to: '/trainer-settlements', label: 'Trainer Settlement', icon: 'payments' },
   { to: '/employees', label: 'Employees', icon: 'employees' }
 ];
 
@@ -142,16 +140,31 @@ function AppShell({ user, onLogout }) {
   const navItems = isSuperAdmin
     ? [...BASE_NAV_ITEMS, ...SUPERADMIN_NAV_ITEMS]
     : BASE_NAV_ITEMS;
+  const profileInitial = user?.name?.trim()?.charAt(0)?.toUpperCase() || 'U';
+  const profilePhoto = user?.profilePhoto || '';
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div className="ops-shell">
       <aside className="ops-sidebar">
         <div className="ops-brand">
-          <div className="ops-brand-dot" />
-          <div>
-            <h1>Ops Intelligence</h1>
-            <p>Capture to optimize</p>
-          </div>
+          <img
+            className="ops-brand-logo"
+            src="/Infinite8.png"
+            alt="Infinite8 logo"
+          />
         </div>
 
         {isSuperAdmin && (
@@ -188,23 +201,63 @@ function AppShell({ user, onLogout }) {
           <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>
             {user?.name} &bull; {user?.role}
           </div>
-          <button className="btn btn-danger" onClick={onLogout}>Logout</button>
         </div>
       </aside>
 
       <div className="ops-main">
-        <header className="ops-topbar">
-          <div>
-            <h2>Training Engagement Management System (TEMS)</h2>
-            <p>Track training engagements, client operations, and cash flow in one loop.</p>
-          </div>
-          <div className="ops-topbar-actions">
-            <button className="btn btn-secondary" onClick={() => navigate('/training-engagements')}>
-              New Engagement
-            </button>
-            <button className="btn btn-primary" onClick={() => navigate('/add-expense')}>
-              Quick Add
-            </button>
+        <header className="ops-header">
+          <div className="ops-header-content">
+            <div className="ops-header-title">Dashboard</div>
+            <div className="ops-header-actions" ref={profileMenuRef}>
+              <button
+                className="ops-profile-chip"
+                onClick={() => setIsProfileMenuOpen((open) => !open)}
+                aria-haspopup="menu"
+                aria-expanded={isProfileMenuOpen}
+              >
+                {profilePhoto ? (
+                  <img className="ops-profile-chip-avatar" src={profilePhoto} alt={user?.name || 'Profile'} />
+                ) : (
+                  <span className="ops-profile-chip-avatar ops-profile-chip-avatar-fallback">{profileInitial}</span>
+                )}
+                <span className="ops-profile-chip-meta">
+                  <strong>{user?.name || 'User'}</strong>
+                  <small>{isSuperAdmin ? 'Super Admin' : 'Employee'}</small>
+                </span>
+                <span className="ops-profile-chip-caret">▾</span>
+              </button>
+              {isProfileMenuOpen && (
+                <div className="ops-profile-menu" role="menu">
+                  <button
+                    className="ops-profile-menu-item"
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      navigate('/profile');
+                    }}
+                  >
+                    Profile
+                  </button>
+                  <button
+                    className="ops-profile-menu-item"
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      navigate('/settings');
+                    }}
+                  >
+                    Settings
+                  </button>
+                  <button
+                    className="ops-profile-menu-item ops-profile-menu-item-danger"
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      onLogout();
+                    }}
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

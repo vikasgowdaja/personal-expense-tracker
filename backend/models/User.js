@@ -44,6 +44,16 @@ const userSchema = new mongoose.Schema({
     sparse: true,
     default: null
   },
+  mobile: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  profilePhoto: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   createdAt: {
     type: Date,
     default: Date.now

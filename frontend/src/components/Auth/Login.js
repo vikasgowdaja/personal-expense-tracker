@@ -20,7 +20,7 @@ function Login({ onLogin }) {
     setLoading(true);
     try {
       const res = await authAPI.login({ email: formData.email, password: formData.password });
-      onLogin(res.data.token, res.data.user);
+      onLogin(res.data.token, res.data.user, res.data.refreshToken);
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed');
@@ -51,7 +51,7 @@ function Login({ onLogin }) {
     setLoading(true);
     try {
       const res = await authAPI.loginOTP({ email: formData.email, otp: formData.otp });
-      onLogin(res.data.token, res.data.user);
+      onLogin(res.data.token, res.data.user, res.data.refreshToken);
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid OTP');

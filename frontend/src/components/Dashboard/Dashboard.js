@@ -44,8 +44,70 @@ function parseAmount(row) {
   return { gross, tds, net };
 }
 
+function dayDiff(fromDateLike, toDateLike) {
+  const from = new Date(fromDateLike);
+  const to = new Date(toDateLike);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+    return null;
+  }
+  from.setHours(0, 0, 0, 0);
+  to.setHours(0, 0, 0, 0);
+  return Math.floor((to - from) / 86400000);
+}
+
+function getCycleAnchorDate(row) {
+  return row.endDate || row.startDate || row.createdAt || null;
+}
+
+function getPaymentCompletionDate(row) {
+  return row.paidDate || row.paymentReceivedDate || row.receivedDate || null;
+}
+
+function getOrgCycleStatus(row, ageDays) {
+  const status = String(row.paymentStatus || '').toLowerCase();
+  if (status === 'paid' || status === 'received') return 'Paid';
+  if (ageDays <= 30) return 'Not Matured';
+  if (ageDays <= 45) return 'Recovery Due';
+  return 'Recovery Overdue';
+}
+
+function getTrainerSettlementStatus(settlementsForRow) {
+  if (!settlementsForRow.length) return 'Not Started';
+  const statuses = settlementsForRow.map((s) => String(s.status || '').toLowerCase());
+  const paidCount = statuses.filter((s) => s === 'paid').length;
+  if (paidCount === settlementsForRow.length) return 'Paid';
+  if (paidCount > 0) return 'Partially Paid';
+  return 'Not Started';
+}
+
+function statusPillStyle(status) {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'paid') {
+    return { background: '#dcfce7', color: '#166534', border: '1px solid #86efac' };
+  }
+  if (normalized === 'recovery overdue') {
+    return { background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5' };
+  }
+  if (normalized === 'recovery due') {
+    return { background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' };
+  }
+  if (normalized === 'partially paid') {
+    return { background: '#ede9fe', color: '#5b21b6', border: '1px solid #c4b5fd' };
+  }
+  return { background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' };
+}
+
 function Dashboard({ user }) {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [cycleTrainerFilter, setCycleTrainerFilter] = useState('');
+  const [cycleCollegeFilter, setCycleCollegeFilter] = useState('');
+  const [cycleOrgFilter, setCycleOrgFilter] = useState('');
+  const [cycleOrgStatusFilter, setCycleOrgStatusFilter] = useState('');
+  const [cycleSettlementStatusFilter, setCycleSettlementStatusFilter] = useState('');
+  const [cycleFromDate, setCycleFromDate] = useState('');
+  const [cycleToDate, setCycleToDate] = useState('');
+  const [cycleSortBy, setCycleSortBy] = useState('ageDays');
+  const [cycleSortDirection, setCycleSortDirection] = useState('desc');
 
   const engagements = useMemo(
     () => JSON.parse(localStorage.getItem('training_engagements') || '[]'),
@@ -154,6 +216,113 @@ function Dashboard({ user }) {
       };
     });
 
+    const cycleBuckets = {
+      dueWithin30: { count: 0, amount: 0 },
+      due31to45: { count: 0, amount: 0 },
+      dueOver45: { count: 0, amount: 0 },
+      paidWithin30: { count: 0, amount: 0 },
+      paidWithin45: { count: 0, amount: 0 },
+      paidAfter45: { count: 0, amount: 0 },
+      paidCycleUnknown: { count: 0, amount: 0 }
+    };
+
+    engagements.forEach((row) => {
+      const { net } = parseAmount(row);
+      const status = String(row.paymentStatus || '').toLowerCase();
+      const isPaid = status === 'paid' || status === 'received';
+      const anchorDate = getCycleAnchorDate(row);
+      if (!anchorDate) {
+        return;
+      }
+
+      if (!isPaid) {
+        const outstandingDays = dayDiff(anchorDate, new Date());
+        if (outstandingDays === null || outstandingDays < 0) {
+          return;
+        }
+        if (outstandingDays <= 30) {
+          cycleBuckets.dueWithin30.count += 1;
+          cycleBuckets.dueWithin30.amount += net;
+        } else if (outstandingDays <= 45) {
+          cycleBuckets.due31to45.count += 1;
+          cycleBuckets.due31to45.amount += net;
+        } else {
+          cycleBuckets.dueOver45.count += 1;
+          cycleBuckets.dueOver45.amount += net;
+        }
+        return;
+      }
+
+      const paidOn = getPaymentCompletionDate(row);
+      if (!paidOn) {
+        cycleBuckets.paidCycleUnknown.count += 1;
+        cycleBuckets.paidCycleUnknown.amount += net;
+        return;
+      }
+
+      const closureDays = dayDiff(anchorDate, paidOn);
+      if (closureDays === null || closureDays < 0) {
+        cycleBuckets.paidCycleUnknown.count += 1;
+        cycleBuckets.paidCycleUnknown.amount += net;
+      } else if (closureDays <= 30) {
+        cycleBuckets.paidWithin30.count += 1;
+        cycleBuckets.paidWithin30.amount += net;
+      } else if (closureDays <= 45) {
+        cycleBuckets.paidWithin45.count += 1;
+        cycleBuckets.paidWithin45.amount += net;
+      } else {
+        cycleBuckets.paidAfter45.count += 1;
+        cycleBuckets.paidAfter45.amount += net;
+      }
+    });
+
+    const totalOpenCycleAmount =
+      cycleBuckets.dueWithin30.amount +
+      cycleBuckets.due31to45.amount +
+      cycleBuckets.dueOver45.amount;
+
+    const totalPaidKnownCycleAmount =
+      cycleBuckets.paidWithin30.amount +
+      cycleBuckets.paidWithin45.amount +
+      cycleBuckets.paidAfter45.amount;
+
+    const collectionIn45Rate =
+      totalPaidKnownCycleAmount > 0
+        ? ((cycleBuckets.paidWithin30.amount + cycleBuckets.paidWithin45.amount) / totalPaidKnownCycleAmount) * 100
+        : 0;
+
+    const cycleDetailedBaseRecords = engagements.map((row) => {
+      const { net } = parseAmount(row);
+      const anchorDate = getCycleAnchorDate(row);
+      const ageDays = anchorDate ? Math.max(dayDiff(anchorDate, new Date()) || 0, 0) : 0;
+      const orgCycleStatus = getOrgCycleStatus(row, ageDays);
+      const settlementsForRow = settlements.filter((s) => s.trainingRecordId === row.id || s.engagementId === row.id);
+      const trainerSettlementStatus = getTrainerSettlementStatus(settlementsForRow);
+      const paidSettlementAmount = settlementsForRow
+        .filter((s) => String(s.status || '').toLowerCase() === 'paid')
+        .reduce((sum, s) => sum + Number(s.amount || 0), 0);
+      const isOrgPaid = orgCycleStatus === 'Paid';
+      const paidFromCompanyPocket = isOrgPaid ? 0 : paidSettlementAmount;
+      const yetToRecover = isOrgPaid ? 0 : Math.max(net - paidSettlementAmount, 0);
+      const marginLeft = net - paidSettlementAmount;
+
+      return {
+        id: row.id,
+        trainerName: row.trainerName || 'Independent Engagement',
+        college: row.college || 'Unknown College',
+        organization: row.organization || 'Unknown Organization',
+        engagement: `${row.college || 'Unknown College'} - ${row.topic || row.notes || 'Training Engagement'}`,
+        endDate: row.endDate || row.startDate || row.createdAt || null,
+        ageDays,
+        indicator: ageDays <= 30 ? 'Within 30 days' : ageDays <= 45 ? 'Crossed 30 days' : 'Crossed 45 days',
+        orgCycleStatus,
+        trainerSettlementStatus,
+        paidFromCompanyPocket,
+        yetToRecover,
+        marginLeft
+      };
+    });
+
     return {
       totals,
       overallSettlementPaid,
@@ -164,11 +333,63 @@ function Dashboard({ user }) {
       overallMarginAmount,
       overallMarginPercent,
       engagementMargins,
+      cycleBuckets,
+      totalOpenCycleAmount,
+      totalPaidKnownCycleAmount,
+      collectionIn45Rate,
+      cycleDetailedBaseRecords,
       monthlyForSelectedYear,
       yearlyRows,
       availableYears
     };
   }, [engagements, selectedYear, settlements]);
+
+  const cycleFilterOptions = useMemo(() => {
+    const trainers = [...new Set(analytics.cycleDetailedBaseRecords.map((r) => r.trainerName))].sort((a, b) => a.localeCompare(b));
+    const colleges = [...new Set(analytics.cycleDetailedBaseRecords.map((r) => r.college))].sort((a, b) => a.localeCompare(b));
+    const organizations = [...new Set(analytics.cycleDetailedBaseRecords.map((r) => r.organization))].sort((a, b) => a.localeCompare(b));
+    return { trainers, colleges, organizations };
+  }, [analytics.cycleDetailedBaseRecords]);
+
+  const cycleRows = useMemo(() => {
+    const rows = analytics.cycleDetailedBaseRecords.filter((row) => {
+      if (cycleTrainerFilter && row.trainerName !== cycleTrainerFilter) return false;
+      if (cycleCollegeFilter && row.college !== cycleCollegeFilter) return false;
+      if (cycleOrgFilter && row.organization !== cycleOrgFilter) return false;
+      if (cycleOrgStatusFilter && row.orgCycleStatus !== cycleOrgStatusFilter) return false;
+      if (cycleSettlementStatusFilter && row.trainerSettlementStatus !== cycleSettlementStatusFilter) return false;
+      if (cycleFromDate && row.endDate && new Date(row.endDate) < new Date(cycleFromDate)) return false;
+      if (cycleToDate && row.endDate && new Date(row.endDate) > new Date(cycleToDate)) return false;
+      return true;
+    });
+
+    const sorted = [...rows].sort((a, b) => {
+      let comparison = 0;
+      if (cycleSortBy === 'ageDays') {
+        comparison = a.ageDays - b.ageDays;
+      } else if (cycleSortBy === 'endDate') {
+        comparison = new Date(a.endDate || 0) - new Date(b.endDate || 0);
+      } else if (cycleSortBy === 'yetToRecover') {
+        comparison = a.yetToRecover - b.yetToRecover;
+      } else if (cycleSortBy === 'marginLeft') {
+        comparison = a.marginLeft - b.marginLeft;
+      }
+      return cycleSortDirection === 'asc' ? comparison : -comparison;
+    });
+
+    return sorted;
+  }, [
+    analytics.cycleDetailedBaseRecords,
+    cycleTrainerFilter,
+    cycleCollegeFilter,
+    cycleOrgFilter,
+    cycleOrgStatusFilter,
+    cycleSettlementStatusFilter,
+    cycleFromDate,
+    cycleToDate,
+    cycleSortBy,
+    cycleSortDirection
+  ]);
 
   return (
     <section className="ops-page">
@@ -322,6 +543,125 @@ function Dashboard({ user }) {
           )}
         </article>
       </div>
+
+      {user?.role === 'superadmin' && (
+      <article className="ops-card" style={{ marginTop: '1.2rem' }}>
+        <h3>30 / 45 Day Cycle Tracking</h3>
+
+        <div style={{ marginTop: '1rem', marginBottom: '0.6rem', fontWeight: 600 }}>Detailed Tracking Records</div>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: '0.6rem',
+          marginBottom: '0.9rem'
+        }}>
+          <select className="form-control" value={cycleTrainerFilter} onChange={(e) => setCycleTrainerFilter(e.target.value)}>
+            <option value="">All Trainers</option>
+            {cycleFilterOptions.trainers.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+
+          <select className="form-control" value={cycleCollegeFilter} onChange={(e) => setCycleCollegeFilter(e.target.value)}>
+            <option value="">All Colleges</option>
+            {cycleFilterOptions.colleges.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+
+          <select className="form-control" value={cycleOrgFilter} onChange={(e) => setCycleOrgFilter(e.target.value)}>
+            <option value="">All Organizations</option>
+            {cycleFilterOptions.organizations.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+
+          <select className="form-control" value={cycleOrgStatusFilter} onChange={(e) => setCycleOrgStatusFilter(e.target.value)}>
+            <option value="">All Org Status</option>
+            <option value="Paid">Paid</option>
+            <option value="Not Matured">Not Matured</option>
+            <option value="Recovery Due">Recovery Due</option>
+            <option value="Recovery Overdue">Recovery Overdue</option>
+          </select>
+
+          <select className="form-control" value={cycleSettlementStatusFilter} onChange={(e) => setCycleSettlementStatusFilter(e.target.value)}>
+            <option value="">All Trainer Status</option>
+            <option value="Paid">Paid</option>
+            <option value="Partially Paid">Partially Paid</option>
+            <option value="Not Started">Not Started</option>
+          </select>
+
+          <input className="form-control" type="date" value={cycleFromDate} onChange={(e) => setCycleFromDate(e.target.value)} />
+          <input className="form-control" type="date" value={cycleToDate} onChange={(e) => setCycleToDate(e.target.value)} />
+
+          <select className="form-control" value={cycleSortBy} onChange={(e) => setCycleSortBy(e.target.value)}>
+            <option value="ageDays">Sort by Age (Days)</option>
+            <option value="endDate">Sort by End Date</option>
+            <option value="yetToRecover">Sort by Yet To Recover</option>
+            <option value="marginLeft">Sort by Margin Left</option>
+          </select>
+
+          <select className="form-control" value={cycleSortDirection} onChange={(e) => setCycleSortDirection(e.target.value)}>
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+          </select>
+        </div>
+
+        <div style={{ overflowX: 'auto' }}>
+          <table className="ops-table">
+            <thead>
+              <tr>
+                <th className="sno-th">#</th>
+                <th>Trainer</th>
+                <th>College</th>
+                <th>Organization</th>
+                <th>Engagement</th>
+                <th>End Date</th>
+                <th>Age (Days)</th>
+                <th>Indicator</th>
+                <th>Org Payment Status</th>
+                <th>Trainer Settlement Status</th>
+                <th>Paid from Company Pocket</th>
+                <th>Yet to Recover</th>
+                <th>Margin Left</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cycleRows.map((row, index) => (
+                <tr key={row.id}>
+                  <td className="sno-cell">{index + 1}</td>
+                  <td>{row.trainerName}</td>
+                  <td><span className="college-cell-badge">{row.college}</span></td>
+                  <td>{row.organization}</td>
+                  <td>{row.engagement}</td>
+                  <td>{row.endDate ? new Date(row.endDate).toLocaleDateString('en-IN') : '—'}</td>
+                  <td>{row.ageDays}</td>
+                  <td>{row.indicator}</td>
+                  <td>
+                    <span style={{ ...statusPillStyle(row.orgCycleStatus), padding: '2px 8px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
+                      {row.orgCycleStatus}
+                    </span>
+                  </td>
+                  <td>
+                    <span style={{ ...statusPillStyle(row.trainerSettlementStatus), padding: '2px 8px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
+                      {row.trainerSettlementStatus}
+                    </span>
+                  </td>
+                  <td style={{ color: row.paidFromCompanyPocket > 0 ? '#dc2626' : '#9ca3af', fontWeight: 600 }}>
+                    {row.paidFromCompanyPocket > 0 ? `-${inr(row.paidFromCompanyPocket).replace('₹', '₹')}` : '—'}
+                  </td>
+                  <td style={{ color: row.yetToRecover > 0 ? '#dc2626' : '#9ca3af', fontWeight: 600 }}>
+                    {row.yetToRecover > 0 ? `-${inr(row.yetToRecover).replace('₹', '₹')}` : '—'}
+                  </td>
+                  <td style={{ color: row.marginLeft >= 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>{inr(row.marginLeft)}</td>
+                </tr>
+              ))}
+              {cycleRows.length === 0 && (
+                <tr>
+                  <td colSpan={13} style={{ textAlign: 'center', color: '#9ca3af', padding: '1rem' }}>
+                    No records match the selected filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </article>
+      )}
 
       {user?.role === 'superadmin' && (
       <article className="ops-card" style={{ marginTop: '1.2rem' }}>

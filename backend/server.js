@@ -31,8 +31,22 @@ const otpLimiter = rateLimit({
 
 // ─── Global Middleware ────────────────────────────────────────────────────────
 
-app.use(cors());
-app.use(express.json());
+const allowedOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow non-browser tools and same-origin requests without Origin header.
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  }
+}));
+app.use(express.json({ limit: '2mb' }));
 
 // ─── Database ─────────────────────────────────────────────────────────────────
 

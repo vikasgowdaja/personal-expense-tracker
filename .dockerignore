@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+npm-debug.log
+.git
+.gitignore
+.github
+.vscode
+**/.DS_Store
+**/Thumbs.db
+frontend/build
+backend/uploads
+backend/.venv
+*.local
+.env
+backend/.env
+frontend/.env
