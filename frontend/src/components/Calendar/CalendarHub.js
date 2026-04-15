@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { trainerSettlementAPI, trainingEngagementAPI } from '../../services/api';
 import './CalendarHub.css';
 
 const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -20,22 +21,6 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function getTrainingEngagements() {
-  try {
-    return JSON.parse(localStorage.getItem('training_engagements') || '[]');
-  } catch {
-    return [];
-  }
-}
-
-function getTrainerSettlements() {
-  try {
-    return JSON.parse(localStorage.getItem('trainer_settlements') || '[]');
-  } catch {
-    return [];
-  }
-}
-
 function normalizeDay(dateLike) {
   const dt = new Date(dateLike);
   if (Number.isNaN(dt.getTime())) return null;
@@ -55,9 +40,30 @@ function CalendarHub() {
   const [selectedDate, setSelectedDate] = useState(() => formatDateKey(new Date()));
   const [hoverDate, setHoverDate] = useState('');
   const [popupDate, setPopupDate] = useState('');
+  const [trainingEngagements, setTrainingEngagements] = useState([]);
+  const [trainerSettlements, setTrainerSettlements] = useState([]);
 
-  const trainingEngagements = getTrainingEngagements();
-  const trainerSettlements = getTrainerSettlements();
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [engagementsRes, userDataRes] = await Promise.all([
+          trainingEngagementAPI.getAll(),
+          trainerSettlementAPI.getAll()
+        ]);
+
+        const engagementRows = Array.isArray(engagementsRes.data) ? engagementsRes.data : [];
+        const settlementRows = Array.isArray(userDataRes.data) ? userDataRes.data : [];
+
+        setTrainingEngagements(engagementRows);
+        setTrainerSettlements(settlementRows);
+      } catch {
+        setTrainingEngagements([]);
+        setTrainerSettlements([]);
+      }
+    };
+
+    load();
+  }, []);
 
   const mergedByDate = useMemo(() => {
     const byDate = {};
@@ -81,6 +87,9 @@ function CalendarHub() {
       const datesToMap = explicitDates.length > 0
         ? explicitDates
         : [engagement.startDate, engagement.endDate].filter(Boolean);
+      const firstTrainer = Array.isArray(engagement.trainers) && engagement.trainers.length > 0
+        ? engagement.trainers[0]
+        : null;
 
       if (explicitDates.length === 0 && datesToMap.length === 2) {
         const start = normalizeDay(engagement.startDate);
@@ -94,12 +103,12 @@ function CalendarHub() {
           const day = ensureDay(key);
           day.engagementCount += 1;
           day.engagements.push({
-            id: engagement.id,
+            id: engagement.id || engagement._id,
             topic: engagement.topic || engagement.notes || 'Training Engagement',
-            college: engagement.college || 'Unknown College',
-            organization: engagement.organization || '—',
-            trainerName: engagement.trainerName || 'Unknown Trainer',
-            paymentStatus: engagement.paymentStatus || 'Invoiced'
+            college: engagement.college || engagement.institutionId?.name || 'Unknown College',
+            organization: engagement.organization || engagement.clientId?.name || '—',
+            trainerName: engagement.trainerName || firstTrainer?.trainerId?.fullName || 'Unknown Trainer',
+            paymentStatus: engagement.paymentStatus || engagement.status || 'Invoiced'
           });
           cursor.setDate(cursor.getDate() + 1);
         }
@@ -113,12 +122,12 @@ function CalendarHub() {
         const day = ensureDay(key);
         day.engagementCount += 1;
         day.engagements.push({
-          id: engagement.id,
+          id: engagement.id || engagement._id,
           topic: engagement.topic || engagement.notes || 'Training Engagement',
-          college: engagement.college || 'Unknown College',
-          organization: engagement.organization || '—',
-          trainerName: engagement.trainerName || 'Unknown Trainer',
-          paymentStatus: engagement.paymentStatus || 'Invoiced'
+          college: engagement.college || engagement.institutionId?.name || 'Unknown College',
+          organization: engagement.organization || engagement.clientId?.name || '—',
+          trainerName: engagement.trainerName || firstTrainer?.trainerId?.fullName || 'Unknown Trainer',
+          paymentStatus: engagement.paymentStatus || engagement.status || 'Invoiced'
         });
       });
     });
@@ -131,7 +140,7 @@ function CalendarHub() {
         day.paidSettlementCount += 1;
       }
       day.settlements.push({
-        id: settlement.id,
+        id: settlement.id || settlement._id,
         trainerName: settlement.trainerName || 'Unknown Trainer',
         engagementLabel: settlement.engagementLabel || '—',
         amount: Number(settlement.amount || 0),

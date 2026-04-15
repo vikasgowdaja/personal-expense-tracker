@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { trainerSettlementAPI, trainingEngagementAPI } from '../../services/api';
 
 const SETTLEMENT_STATUS = ['Planned', 'Partially Paid', 'Paid'];
 const PLACEHOLDER_TRAINER_PATTERN = /independent engagement/i;
@@ -32,98 +33,52 @@ function daysSince(dateLike) {
   return days > 0 ? days : 0;
 }
 
-function isEngagementVisibleForUser(row, user) {
-  if (!user) return true;
+function normalizeApiEngagement(row) {
+  const firstTrainer = Array.isArray(row.trainers) && row.trainers.length > 0 ? row.trainers[0] : null;
+  const trainerDoc = firstTrainer?.trainerId;
 
-  if ((user.role === 'superadmin' || user.role === 'platform_owner')) {
-    if (row.ownerSuperadminId) {
-      return String(row.ownerSuperadminId) === String(user.id);
-    }
-    return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
-  }
-
-  if (row.sourcedByUserId) {
-    return String(row.sourcedByUserId) === String(user.id);
-  }
-  return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
+  return {
+    id: row._id,
+    trainerId: trainerDoc?._id || firstTrainer?.trainerId || '',
+    trainerName: trainerDoc?.fullName || 'Independent Engagement',
+    college: row.institutionId?.name || 'Unknown College',
+    organization: row.clientId?.name || 'Unknown Organization',
+    startDate: row.startDate || '',
+    endDate: row.endDate || '',
+    totalDays: Number(row.totalDays || calcDaySpan(row.startDate, row.endDate) || 0),
+    paymentStatus: row.status || 'Invoiced',
+    topic: firstTrainer?.trainingTopic || row.engagementTitle || row.notes || 'Training Engagement',
+    notes: row.notes || '',
+    ratePerDay: Number(firstTrainer?.dailyRate || 0),
+    grossAmount: Number(row.grossAmount !== undefined ? row.grossAmount : row.totalAmount || 0),
+    tdsApplicable: row.tdsApplicable !== false,
+    tdsAmount: Number(row.tdsAmount || 0),
+    totalAmount: Number(row.totalAmount || 0)
+  };
 }
 
-function getTrainingEngagements(user) {
-  try {
-    const all = JSON.parse(localStorage.getItem('training_engagements') || '[]');
-    return all.filter((row) => isEngagementVisibleForUser(row, user));
-  } catch {
-    return [];
-  }
-}
+function normalizeSettlementRow(row) {
+  const trainingId = typeof row.trainingEngagementId === 'object'
+    ? row.trainingEngagementId?._id
+    : row.trainingEngagementId;
 
-function getTrainerProfiles(user, scopedEngagements) {
-  try {
-    const all = JSON.parse(localStorage.getItem('trainer_profiles') || '[]');
-    if (!user) return all;
-
-    const scopedIds = new Set(scopedEngagements.map((row) => String(row.trainerId || '')));
-    const scopedNames = new Set(
-      scopedEngagements.map((row) => String(row.trainerName || '').trim().toLowerCase()).filter(Boolean)
-    );
-
-    return all.filter((trainer) => {
-      if ((user.role === 'superadmin' || user.role === 'platform_owner')) {
-        if (trainer.ownerSuperadminId) {
-          return String(trainer.ownerSuperadminId) === String(user.id);
-        }
-        if (trainer.sourcedByUserId) {
-          return false;
-        }
-      } else {
-        if (trainer.sourcedByUserId) {
-          return String(trainer.sourcedByUserId) === String(user.id);
-        }
-        if (trainer.sourcedBy || trainer.sourcedByName) {
-          return trainer.sourcedBy === user.employeeId || trainer.sourcedByName === user.name;
-        }
-      }
-
-      const trainerId = String(trainer.id || trainer._id || '');
-      const trainerName = String(trainer.trainerName || '').trim().toLowerCase();
-      return (trainerId && scopedIds.has(trainerId)) || (trainerName && scopedNames.has(trainerName));
-    });
-  } catch {
-    return [];
-  }
-}
-
-function getTrainerSettlementsFromList(all, user, scopedEngagements) {
-  const engagementIds = new Set((scopedEngagements || []).map((row) => row.id));
-
-  return (all || []).filter((item) => {
-    if (item.trainingRecordId) {
-      return engagementIds.has(item.trainingRecordId);
-    }
-
-    if (!user) return true;
-
-    if ((user.role === 'superadmin' || user.role === 'platform_owner')) {
-      if (item.ownerSuperadminId) {
-        return String(item.ownerSuperadminId) === String(user.id);
-      }
-      return item.sourcedBy === user.employeeId || item.sourcedByName === user.name;
-    }
-
-    if (item.sourcedByUserId) {
-      return String(item.sourcedByUserId) === String(user.id);
-    }
-    return item.sourcedBy === user.employeeId || item.sourcedByName === user.name;
-  });
-}
-
-function getTrainerSettlements(user, scopedEngagements) {
-  try {
-    const all = JSON.parse(localStorage.getItem('trainer_settlements') || '[]');
-    return getTrainerSettlementsFromList(all, user, scopedEngagements);
-  } catch {
-    return [];
-  }
+  return {
+    id: row._id,
+    trainingRecordId: trainingId ? String(trainingId) : '',
+    engagementLabel: row.engagementLabel || '',
+    trainerId: row.trainerId ? String(row.trainerId) : '',
+    trainerName: row.trainerName || '',
+    collegeName: row.collegeName || '',
+    organizationName: row.organizationName || '',
+    startDate: row.startDate ? new Date(row.startDate).toISOString().slice(0, 10) : '',
+    endDate: row.endDate ? new Date(row.endDate).toISOString().slice(0, 10) : '',
+    totalDays: Number(row.totalDays || 0),
+    perDayPayment: Number(row.perDayPayment || 0),
+    amount: Number(row.amount || 0),
+    paidDate: row.paidDate ? new Date(row.paidDate).toISOString().slice(0, 10) : '',
+    status: row.status || 'Planned',
+    notes: row.notes || ''
+  };
 }
 
 function parseNet(row) {
@@ -143,7 +98,9 @@ function parseNet(row) {
 }
 
 export default function TrainersSettlement({ user }) {
-  const [version, setVersion] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [trainingRows, setTrainingRows] = useState([]);
+  const [settlements, setSettlements] = useState([]);
   const [agingTrainerFilter, setAgingTrainerFilter] = useState('');
   const [agingCollegeFilter, setAgingCollegeFilter] = useState('');
   const [agingOrganizationFilter, setAgingOrganizationFilter] = useState('');
@@ -171,17 +128,34 @@ export default function TrainersSettlement({ user }) {
     notes: ''
   });
 
-  const trainingRows = useMemo(() => getTrainingEngagements(user), [user, version]);
-  const settlements = useMemo(() => getTrainerSettlements(user, trainingRows), [user, trainingRows, version]);
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [engagementsRes, settlementsRes] = await Promise.all([
+        trainingEngagementAPI.getAll(),
+        trainerSettlementAPI.getAll()
+      ]);
+
+      const engagementRows = Array.isArray(engagementsRes.data) ? engagementsRes.data : [];
+      const settlementRows = Array.isArray(settlementsRes.data) ? settlementsRes.data : [];
+
+      setTrainingRows(engagementRows.map(normalizeApiEngagement));
+      setSettlements(settlementRows.map(normalizeSettlementRow));
+    } catch (err) {
+      window.alert(err?.response?.data?.message || 'Failed to load settlement data from database.');
+      setTrainingRows([]);
+      setSettlements([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const trainerNames = useMemo(() => {
     const byName = new Map();
-
-    getTrainerProfiles(user, trainingRows).forEach((trainer) => {
-      const name = (trainer.trainerName || '').trim();
-      if (!name || PLACEHOLDER_TRAINER_PATTERN.test(name)) return;
-      byName.set(name.toLowerCase(), { id: trainer.id || name.toLowerCase(), name });
-    });
 
     trainingRows.forEach((row) => {
       const name = (row.trainerName || '').trim();
@@ -192,7 +166,7 @@ export default function TrainersSettlement({ user }) {
     });
 
     return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [trainingRows, user]);
+  }, [trainingRows]);
 
   const engagementOptions = useMemo(() => {
     return trainingRows.map((row) => {
@@ -238,16 +212,6 @@ export default function TrainersSettlement({ user }) {
 
   const openOptions = filteredOptions.filter((item) => !item.hasSettlement);
   const doneOptions = filteredOptions.filter((item) => item.hasSettlement);
-
-  const updateSettlements = (updater) => {
-    const all = JSON.parse(localStorage.getItem('trainer_settlements') || '[]');
-    const scoped = getTrainerSettlementsFromList(all, user, trainingRows);
-    const nextScoped = updater(scoped);
-    const scopedIds = new Set(scoped.map((item) => item.id));
-    const untouched = all.filter((item) => !scopedIds.has(item.id));
-    localStorage.setItem('trainer_settlements', JSON.stringify([...nextScoped, ...untouched]));
-    setVersion((v) => v + 1);
-  };
 
   const handleTrainerChange = (trainerId) => {
     const selected = trainerNames.find((item) => item.id === trainerId);
@@ -298,7 +262,7 @@ export default function TrainersSettlement({ user }) {
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const amount = Number(settlementForm.amount || 0);
     if (!settlementForm.trainingRecordId) return window.alert('Select engagement.');
     if (!settlementForm.trainerId) return window.alert('Select trainer.');
@@ -309,9 +273,8 @@ export default function TrainersSettlement({ user }) {
       return window.alert('A settlement already exists for this engagement. Delete the old settlement record first if you want a fresh settlement.');
     }
 
-    const record = {
-      id: settlementForm.id || `set-${Date.now()}`,
-      trainingRecordId: settlementForm.trainingRecordId,
+    const payload = {
+      trainingEngagementId: settlementForm.trainingRecordId,
       engagementLabel: settlementForm.engagementLabel,
       trainerId: settlementForm.trainerId,
       trainerName: settlementForm.trainerName,
@@ -325,21 +288,16 @@ export default function TrainersSettlement({ user }) {
       paidDate: settlementForm.paidDate,
       status: settlementForm.status,
       notes: settlementForm.notes,
-      ownerSuperadminId: (user?.role === 'superadmin' || user?.role === 'platform_owner') ? user.id : '',
-      connectionId: (user?.role === 'superadmin' || user?.role === 'platform_owner') ? (user.defaultConnectionId || '') : '',
-      sourcedByUserId: user?.id || '',
       sourcedBy: user?.employeeId || '',
-      sourcedByName: user?.name || '',
-      updatedAt: new Date().toISOString()
+      sourcedByName: user?.name || ''
     };
 
-    updateSettlements((current) => {
-      const idx = current.findIndex((item) => item.id === record.id);
-      if (idx === -1) return [record, ...current];
-      const next = [...current];
-      next[idx] = record;
-      return next;
-    });
+    try {
+      await trainerSettlementAPI.create(payload);
+      await loadData();
+    } catch (err) {
+      return window.alert(err?.response?.data?.message || 'Unable to save settlement to database.');
+    }
 
     setSettlementForm({
       id: '', trainingRecordId: '', engagementLabel: '', trainerId: '', trainerName: '',
@@ -348,15 +306,26 @@ export default function TrainersSettlement({ user }) {
     });
   };
 
-  const handleMarkPaid = (id) => {
-    updateSettlements((current) => current.map((item) => (
-      item.id === id ? { ...item, status: 'Paid', updatedAt: new Date().toISOString() } : item
-    )));
+  const handleMarkPaid = async (id) => {
+    try {
+      await trainerSettlementAPI.update(id, {
+        status: 'Paid',
+        paidDate: new Date().toISOString().slice(0, 10)
+      });
+      await loadData();
+    } catch (err) {
+      window.alert(err?.response?.data?.message || 'Unable to mark settlement as paid.');
+    }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (!window.confirm('Delete this settlement?')) return;
-    updateSettlements((current) => current.filter((item) => item.id !== id));
+    try {
+      await trainerSettlementAPI.delete(id);
+      await loadData();
+    } catch (err) {
+      window.alert(err?.response?.data?.message || 'Unable to delete settlement.');
+    }
   };
 
   const statusSummary = useMemo(() => {

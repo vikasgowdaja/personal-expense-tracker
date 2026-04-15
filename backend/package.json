@@ -5,7 +5,13 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "seed:demo": "node scripts/seedDemoData.js",
+    "seed:demo:list": "node scripts/seedDemoData.js --list-runs",
+    "seed:demo:remove": "node scripts/seedDemoData.js --remove-run",
+    "collections:status": "node scripts/collectionsManager.js status",
+    "collections:ensure": "node scripts/collectionsManager.js ensure",
+    "collections:rename": "node scripts/collectionsManager.js rename"
   },
   "keywords": [
     "expense",

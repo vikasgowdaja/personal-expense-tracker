@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { trainerAPI } from '../../services/api';
 
 const EMPTY_FORM = {
@@ -28,6 +28,9 @@ function isEngagementVisibleForUser(row, user) {
 
 function isTrainerVisibleForUser(trainer, user, scopedEngagements) {
   if (!user) return true;
+
+  // API results are already server-scoped by auth and role.
+  if (trainer.user) return true;
 
   if ((user.role === 'superadmin' || user.role === 'platform_owner')) {
     if (trainer.ownerSuperadminId) {
@@ -76,15 +79,51 @@ function getOwnershipDefaults(user) {
 }
 
 function Trainers({ user }) {
-  const [allTrainers, setAllTrainers] = useState(() =>
-    JSON.parse(localStorage.getItem('trainer_profiles') || '[]')
-  );
+  const [allTrainers, setAllTrainers] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState('');
   const [form, setForm] = useState(EMPTY_FORM);
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState('');
+
+  const mapTrainerForUi = (row) => ({
+    id: row.id || row._id,
+    trainerName: row.trainerName || row.fullName || '',
+    userProfile: {
+      name: row.userProfile?.name || row.fullName || row.trainerName || '',
+      email: row.userProfile?.email || row.email || '',
+      phone: row.userProfile?.phone || row.phone || ''
+    },
+    yearsOfExperience: Number(row.yearsOfExperience || 0),
+    specialization: row.specialization || '',
+    institution: row.institution || row.college || '',
+    records: row.records || [],
+    createdAt: row.createdAt,
+    ownerSuperadminId: row.ownerSuperadminId || '',
+    connectionId: row.connectionId || '',
+    sourcedByUserId: row.sourcedByUserId || '',
+    sourcedBy: row.sourcedBy || '',
+    sourcedByName: row.sourcedByName || '',
+    user: row.user
+  });
+
+  const loadTrainers = async () => {
+    try {
+      const res = await trainerAPI.getAll();
+      const rows = Array.isArray(res.data) ? res.data : [];
+      const normalized = rows.map(mapTrainerForUi);
+      setAllTrainers(normalized);
+      localStorage.setItem('trainer_profiles', JSON.stringify(normalized));
+    } catch {
+      const cached = JSON.parse(localStorage.getItem('trainer_profiles') || '[]');
+      setAllTrainers(cached);
+    }
+  };
+
+  useEffect(() => {
+    loadTrainers();
+  }, []);
 
   const scopedEngagements = useMemo(() => {
     const rows = JSON.parse(localStorage.getItem('training_engagements') || '[]');
@@ -95,11 +134,6 @@ function Trainers({ user }) {
     () => allTrainers.filter((trainer) => isTrainerVisibleForUser(trainer, user, scopedEngagements)),
     [allTrainers, user, scopedEngagements]
   );
-
-  const persist = (next) => {
-    localStorage.setItem('trainer_profiles', JSON.stringify(next));
-    setAllTrainers(next);
-  };
 
   const selectedTrainer = trainers.find((t) => t.id === selectedId);
 
@@ -139,46 +173,48 @@ function Trainers({ user }) {
 
   const handleDelete = (id) => {
     if (!window.confirm('Delete this trainer profile? This cannot be undone.')) return;
-    const next = allTrainers.filter((t) => t.id !== id);
-    persist(next);
-    if (selectedId === id) setSelectedId('');
-    if (editId === id) handleCancelForm();
+    trainerAPI.delete(id)
+      .then(() => loadTrainers())
+      .then(() => {
+        if (selectedId === id) setSelectedId('');
+        if (editId === id) handleCancelForm();
+      })
+      .catch((err) => {
+        window.alert(err?.response?.data?.message || 'Unable to delete trainer');
+      });
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     if (!form.trainerName.trim() || !form.email.trim()) {
       window.alert('Trainer name and email are required.');
       return;
     }
-    const existing = allTrainers.find((t) => t.id === editId);
-    const saved = {
-      id: editId || Date.now().toString(),
-      trainerName: form.trainerName.trim(),
-      userProfile: {
-        name: form.trainerName.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim()
-      },
+
+    const payload = {
+      fullName: form.trainerName.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim(),
       yearsOfExperience: Number(form.yearsOfExperience || 0),
-      specialization: form.specialization.trim(),
-      institution: form.institution.trim(),
-      records: existing?.records || [],
-      createdAt: existing?.createdAt || new Date().toISOString(),
-      ownerSuperadminId: existing?.ownerSuperadminId || getOwnershipDefaults(user).ownerSuperadminId,
-      connectionId: existing?.connectionId || getOwnershipDefaults(user).connectionId,
-      sourcedByUserId: existing?.sourcedByUserId || getOwnershipDefaults(user).sourcedByUserId,
-      sourcedBy: existing?.sourcedBy || getOwnershipDefaults(user).sourcedBy,
-      sourcedByName: existing?.sourcedByName || getOwnershipDefaults(user).sourcedByName
+      specialization: form.specialization.trim()
     };
 
-    const next = editId
-      ? allTrainers.map((t) => (t.id === editId ? saved : t))
-      : [saved, ...allTrainers];
+    try {
+      let saved;
+      if (editId) {
+        const res = await trainerAPI.update(editId, payload);
+        saved = mapTrainerForUi(res.data || {});
+      } else {
+        const res = await trainerAPI.create(payload);
+        saved = mapTrainerForUi(res.data || {});
+      }
 
-    persist(next);
-    setSelectedId(saved.id);
-    handleCancelForm();
+      await loadTrainers();
+      setSelectedId(saved.id || '');
+      handleCancelForm();
+    } catch (err) {
+      window.alert(err?.response?.data?.message || 'Unable to save trainer');
+    }
   };
 
   const handlePdfUpload = async (e) => {
@@ -195,37 +231,12 @@ function Trainers({ user }) {
       const extracted = res.data.extracted || {};
       const savedTrainer = res.data.trainer || {};
 
-      const mapped = {
-        id: savedTrainer._id || Date.now().toString(),
-        trainerName: savedTrainer.fullName || extracted.fullName || 'Imported Trainer',
-        userProfile: {
-          name: savedTrainer.fullName || extracted.fullName || '',
-          email: savedTrainer.email || extracted.email || '',
-          phone: savedTrainer.phone || extracted.phone || ''
-        },
-        yearsOfExperience: savedTrainer.yearsOfExperience || extracted.yearsOfExperience || 0,
-        specialization: (savedTrainer.topics || extracted.topics || []).join(', '),
-        institution: '',
-        records: [],
-        createdAt: savedTrainer.createdAt || new Date().toISOString(),
-        ...getOwnershipDefaults(user)
-      };
+      const mapped = mapTrainerForUi({
+        ...savedTrainer,
+        fullName: savedTrainer.fullName || extracted.fullName || 'Imported Trainer'
+      });
 
-      const existingIdx = allTrainers.findIndex(
-        (t) =>
-          isTrainerVisibleForUser(t, user, scopedEngagements) &&
-          t.userProfile?.email &&
-          mapped.userProfile.email &&
-          t.userProfile.email.toLowerCase() === mapped.userProfile.email.toLowerCase()
-      );
-      const next =
-        existingIdx === -1
-          ? [mapped, ...allTrainers]
-          : allTrainers.map((t, i) =>
-              i === existingIdx ? { ...t, ...mapped, records: t.records || [] } : t
-            );
-
-      persist(next);
+      await loadTrainers();
       setSelectedId(mapped.id);
     } catch (err) {
       setPdfError(err?.response?.data?.message || 'Could not extract trainer info from the PDF.');

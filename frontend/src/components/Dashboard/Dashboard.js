@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { trainerSettlementAPI, trainingEngagementAPI } from '../../services/api';
 import './Dashboard.css';
 
 const DEFAULT_TDS_PERCENT = 10;
@@ -97,27 +98,44 @@ function statusPillStyle(status) {
   return { background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' };
 }
 
-function isSettlementVisibleForUser(item, user, scopedEngagementIds) {
-  if (item.trainingRecordId) {
-    return scopedEngagementIds.has(item.trainingRecordId);
-  }
+function getRowId(row) {
+  return row.id || row._id;
+}
 
-  if (!user) return true;
+function normalizeEngagement(row) {
+  const firstTrainer = Array.isArray(row.trainers) && row.trainers.length > 0 ? row.trainers[0] : null;
+  const trainerDoc = firstTrainer?.trainerId;
 
-  if (user.role === 'superadmin' || user.role === 'platform_owner') {
-    if (item.ownerSuperadminId) {
-      return String(item.ownerSuperadminId) === String(user.id);
-    }
-    return item.sourcedBy === user.employeeId || item.sourcedByName === user.name;
-  }
+  return {
+    ...row,
+    id: row.id || row._id,
+    college: row.college || row.institutionId?.name || 'Unknown College',
+    organization: row.organization || row.clientId?.name || 'Unknown Organization',
+    topic: row.topic || firstTrainer?.trainingTopic || row.engagementTitle || row.notes || 'Training Engagement',
+    trainerId: row.trainerId || trainerDoc?._id || firstTrainer?.trainerId || '',
+    trainerName: row.trainerName || trainerDoc?.fullName || 'Independent Engagement',
+    paymentStatus: row.paymentStatus || row.status || 'Invoiced',
+    ratePerDay: row.ratePerDay !== undefined ? row.ratePerDay : Number(firstTrainer?.dailyRate || 0)
+  };
+}
 
-  if (item.sourcedByUserId) {
-    return String(item.sourcedByUserId) === String(user.id);
-  }
-  return item.sourcedBy === user.employeeId || item.sourcedByName === user.name;
+function normalizeSettlement(row) {
+  const engagementId = typeof row.trainingEngagementId === 'object'
+    ? row.trainingEngagementId?._id
+    : row.trainingEngagementId;
+
+  return {
+    ...row,
+    id: row.id || row._id,
+    trainingRecordId: String(row.trainingRecordId || engagementId || ''),
+    status: row.status || 'Planned',
+    amount: Number(row.amount || 0)
+  };
 }
 
 function Dashboard({ user }) {
+  const [engagementRows, setEngagementRows] = useState([]);
+  const [settlementRows, setSettlementRows] = useState([]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [cycleTrainerFilter, setCycleTrainerFilter] = useState('');
   const [cycleCollegeFilter, setCycleCollegeFilter] = useState('');
@@ -129,11 +147,56 @@ function Dashboard({ user }) {
   const [cycleSortBy, setCycleSortBy] = useState('ageDays');
   const [cycleSortDirection, setCycleSortDirection] = useState('desc');
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadDashboardData() {
+      try {
+        const [engagementsRes, settlementsRes] = await Promise.all([
+          trainingEngagementAPI.getAll(),
+          trainerSettlementAPI.getAll()
+        ]);
+
+        const rows = Array.isArray(engagementsRes.data)
+          ? engagementsRes.data
+          : Array.isArray(engagementsRes.data?.data)
+            ? engagementsRes.data.data
+            : [];
+
+        const settlementList = Array.isArray(settlementsRes.data)
+          ? settlementsRes.data
+          : Array.isArray(settlementsRes.data?.data)
+            ? settlementsRes.data.data
+            : [];
+
+        if (!isMounted) return;
+
+        const normalized = rows.map(normalizeEngagement);
+        setEngagementRows(normalized);
+        setSettlementRows(settlementList.map(normalizeSettlement));
+      } catch {
+        if (!isMounted) return;
+        setEngagementRows([]);
+        setSettlementRows([]);
+      }
+    }
+
+    loadDashboardData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const engagements = useMemo(() => {
-    const all = JSON.parse(localStorage.getItem('training_engagements') || '[]');
+    const all = engagementRows;
     if (!user) return all;
 
-    if (user.role === 'superadmin' || user.role === 'platform_owner') {
+    if (user.role === 'platform_owner') {
+      return all;
+    }
+
+    if (user.role === 'superadmin') {
       return all.filter((row) => {
         if (row.ownerSuperadminId) {
           return String(row.ownerSuperadminId) === String(user.id);
@@ -149,18 +212,22 @@ function Dashboard({ user }) {
       }
       return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
     });
-  }, [user]);
+  }, [engagementRows, user]);
 
-  const trainers = useMemo(
-    () => JSON.parse(localStorage.getItem('trainer_profiles') || '[]'),
-    []
-  );
+  const trainers = useMemo(() => {
+    const trainerMap = new Map();
+    engagements.forEach((row) => {
+      const key = String(row.trainerId || row.trainerName || '').trim();
+      if (!key) return;
+      trainerMap.set(key, row.trainerName || key);
+    });
+    return Array.from(trainerMap.values());
+  }, [engagements]);
 
   const settlements = useMemo(() => {
-    const all = JSON.parse(localStorage.getItem('trainer_settlements') || '[]');
-    const scopedEngagementIds = new Set(engagements.map((row) => row.id));
-    return all.filter((item) => isSettlementVisibleForUser(item, user, scopedEngagementIds));
-  }, [engagements, user]);
+    const scopedEngagementIds = new Set(engagements.map((row) => getRowId(row)));
+    return settlementRows.filter((item) => scopedEngagementIds.has(item.trainingRecordId));
+  }, [engagements, settlementRows]);
 
   const analytics = useMemo(() => {
     const totals = engagements.reduce(
@@ -238,12 +305,12 @@ function Dashboard({ user }) {
 
     const engagementMargins = engagements.map((row) => {
       const { net } = parseAmount(row);
-      const settlementPaid = Number(settledPaidByEngagement[row.id] || 0);
+      const settlementPaid = Number(settledPaidByEngagement[getRowId(row)] || 0);
       const marginAmount = net - settlementPaid;
       const marginPercent = net > 0 ? (marginAmount / net) * 100 : 0;
 
       return {
-        id: row.id,
+        id: getRowId(row),
         label: `${row.college || 'Unknown College'} - ${row.topic || row.notes || 'Training Engagement'}`,
         college: row.college || 'Unknown College',
         topic: row.topic || row.notes || 'Training Engagement',
@@ -334,7 +401,8 @@ function Dashboard({ user }) {
       const anchorDate = getCycleAnchorDate(row);
       const ageDays = anchorDate ? Math.max(dayDiff(anchorDate, new Date()) || 0, 0) : 0;
       const orgCycleStatus = getOrgCycleStatus(row, ageDays);
-      const settlementsForRow = settlements.filter((s) => s.trainingRecordId === row.id || s.engagementId === row.id);
+      const rowId = getRowId(row);
+      const settlementsForRow = settlements.filter((s) => s.trainingRecordId === rowId || s.engagementId === rowId);
       const trainerSettlementStatus = getTrainerSettlementStatus(settlementsForRow);
       const paidSettlementAmount = settlementsForRow
         .filter((s) => String(s.status || '').toLowerCase() === 'paid')
@@ -345,7 +413,7 @@ function Dashboard({ user }) {
       const marginLeft = net - paidSettlementAmount;
 
       return {
-        id: row.id,
+        id: rowId,
         trainerName: row.trainerName || 'Independent Engagement',
         college: row.college || 'Unknown College',
         organization: row.organization || 'Unknown Organization',

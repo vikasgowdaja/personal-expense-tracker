@@ -76,6 +76,9 @@ app.use('/api/topics', require('./routes/topics'));
 app.use('/api/training-engagements', require('./routes/trainingEngagements'));
 app.use('/api/invoices', require('./routes/invoices'));
 app.use('/api/payment-details', require('./routes/paymentDetails'));
+app.use('/api/user-data', require('./routes/userData'));
+app.use('/api/trainer-settlements', require('./routes/trainerSettlements'));
+app.use('/api/system', require('./routes/system'));
 
 // Privileged routes (superadmin only – enforced inside each router)
 app.use('/api/financial', require('./routes/financial'));

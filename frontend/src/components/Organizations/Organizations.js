@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { clientAPI } from '../../services/api';
+import { clientAPI, trainingEngagementAPI } from '../../services/api';
 
 const EMPTY_FORM = {
   name: '',
@@ -15,17 +15,18 @@ function Organizations() {
   const [editId, setEditId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [engagements, setEngagements] = useState(() =>
-    JSON.parse(localStorage.getItem('training_engagements') || '[]')
-  );
+  const [engagements, setEngagements] = useState([]);
 
   const loadOrganizations = async () => {
     try {
       setLoading(true);
       setError('');
-      const res = await clientAPI.getAll();
-      setOrganizations(res.data || []);
-      setEngagements(JSON.parse(localStorage.getItem('training_engagements') || '[]'));
+      const [orgRes, engagementsRes] = await Promise.all([
+        clientAPI.getAll(),
+        trainingEngagementAPI.getAll()
+      ]);
+      setOrganizations(orgRes.data || []);
+      setEngagements(Array.isArray(engagementsRes.data) ? engagementsRes.data : []);
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to load organizations');
     } finally {

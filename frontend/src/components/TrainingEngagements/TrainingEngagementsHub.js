@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { clientAPI, employeeAPI, institutionAPI, topicAPI } from '../../services/api';
+import { clientAPI, employeeAPI, institutionAPI, topicAPI, trainerAPI, trainingEngagementAPI } from '../../services/api';
 
 const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -23,6 +23,71 @@ function toLocalDateKey(date = new Date()) {
 }
 
 const TODAY_KEY = toLocalDateKey(new Date());
+
+function toDateInputValue(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function buildDateListFromRange(startDate, endDate) {
+  if (!startDate || !endDate) return [];
+  const dates = [];
+  const cursor = new Date(startDate);
+  const end = new Date(endDate);
+  cursor.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+  while (cursor <= end) {
+    dates.push(toLocalDateKey(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+function normalizeApiEngagement(row) {
+  const firstTrainer = Array.isArray(row.trainers) && row.trainers.length > 0 ? row.trainers[0] : null;
+  const trainerDoc = firstTrainer?.trainerId;
+  const startDate = toDateInputValue(row.startDate);
+  const endDate = toDateInputValue(row.endDate);
+  const selectedDates = Array.isArray(row.selectedDates) && row.selectedDates.length > 0
+    ? normalizeDateList(row.selectedDates)
+    : buildDateListFromRange(startDate, endDate);
+
+  return {
+    id: row._id,
+    topic: firstTrainer?.trainingTopic || '',
+    engagementType: row.engagementTitle || 'Batch Training',
+    trainerId: trainerDoc?._id || firstTrainer?.trainerId || '',
+    trainerName: trainerDoc?.fullName || '',
+    college: row.institutionId?.name || '',
+    organization: row.clientId?.name || '',
+    dateMode: 'selected',
+    startDate,
+    endDate,
+    selectedDates,
+    totalDays: Number(row.totalDays || selectedDates.length || 0),
+    dailyHours: Number(row.dailyHours || 0),
+    learners: Number(row.learners || 0),
+    ratePerDay: Number(firstTrainer?.dailyRate || 0),
+    grossAmount: Number(row.grossAmount !== undefined ? row.grossAmount : row.totalAmount || 0),
+    tdsApplicable: row.tdsApplicable !== false,
+    tdsPercent: Number(row.tdsPercent !== undefined ? row.tdsPercent : DEFAULT_TDS_PERCENT),
+    tdsAmount: Number(row.tdsAmount || 0),
+    totalAmount: Number(row.totalAmount || 0),
+    notes: row.notes || '',
+    paymentStatus: row.status || 'Invoiced',
+    ownerSuperadminId: row.ownerSuperadminId || '',
+    connectionId: row.connectionId || '',
+    sourcedByUserId: row.sourcedByUserId || '',
+    sourcedBy: row.sourcedBy || '',
+    sourcedByName: row.sourcedByName || '',
+    createdAt: row.createdAt || new Date().toISOString()
+  };
+}
 
 const EMPTY_FORM = {
   topic: '',
@@ -158,9 +223,7 @@ function getEmployeeConnectionContext(user, selectedConnectionId) {
 }
 
 function TrainingEngagementsHub({ user }) {
-  const [engagements, setEngagements] = useState(() =>
-    JSON.parse(localStorage.getItem('training_engagements') || '[]')
-  );
+  const [engagements, setEngagements] = useState([]);
   const [form, setForm] = useState(() => {
     const base = { ...EMPTY_FORM };
     if (user?.employeeId) {
@@ -184,6 +247,8 @@ function TrainingEngagementsHub({ user }) {
   const [collegeOptions, setCollegeOptions] = useState([]);
   const [organizationOptions, setOrganizationOptions] = useState([]);
   const [trainerOptions, setTrainerOptions] = useState([]);
+  const [institutionRows, setInstitutionRows] = useState([]);
+  const [clientRows, setClientRows] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
 
   const [filterCollege, setFilterCollege] = useState('');
@@ -197,8 +262,18 @@ function TrainingEngagementsHub({ user }) {
   const [bulkSourcedByName, setBulkSourcedByName] = useState('');
 
   const persist = (next) => {
-    localStorage.setItem('training_engagements', JSON.stringify(next));
     setEngagements(next);
+  };
+
+  const loadEngagements = async () => {
+    try {
+      const res = await trainingEngagementAPI.getAll();
+      const rows = Array.isArray(res.data) ? res.data : [];
+      const normalized = rows.map(normalizeApiEngagement);
+      persist(normalized);
+    } catch {
+      setEngagements([]);
+    }
   };
 
   const refreshLookups = async () => {
@@ -214,14 +289,16 @@ function TrainingEngagementsHub({ user }) {
         .map((item) => (item.name || '').trim())
         .filter(Boolean);
 
-      const institutions = (institutionsRes.data || [])
-        .map((item) => (item.name || '').trim())
-        .filter(Boolean);
-      const clients = (clientsRes.data || [])
-        .map((item) => (item.name || '').trim())
-        .filter(Boolean);
+      const institutionsData = Array.isArray(institutionsRes.data) ? institutionsRes.data : [];
+      const clientsData = Array.isArray(clientsRes.data) ? clientsRes.data : [];
 
-      const savedRows = JSON.parse(localStorage.getItem('training_engagements') || '[]');
+      const institutions = institutionsData.map((item) => (item.name || '').trim()).filter(Boolean);
+      const clients = clientsData.map((item) => (item.name || '').trim()).filter(Boolean);
+
+      setInstitutionRows(institutionsData);
+      setClientRows(clientsData);
+
+      const savedRows = engagements;
       const savedTopics = savedRows.map((item) => (item.topic || '').trim()).filter(Boolean);
       const savedColleges = savedRows.map((item) => (item.college || '').trim()).filter(Boolean);
       const savedOrganizations = savedRows.map((item) => (item.organization || '').trim()).filter(Boolean);
@@ -238,7 +315,7 @@ function TrainingEngagementsHub({ user }) {
         setEmployeeOptions([]);
       }
     } catch {
-      const savedRows = JSON.parse(localStorage.getItem('training_engagements') || '[]');
+      const savedRows = engagements;
       setTopicOptions([
         ...new Set(savedRows.map((item) => (item.topic || '').trim()).filter(Boolean))
       ]);
@@ -252,9 +329,26 @@ function TrainingEngagementsHub({ user }) {
   };
 
   useEffect(() => {
-    refreshLookups();
-    const savedTrainerProfiles = JSON.parse(localStorage.getItem('trainer_profiles') || '[]');
-    setTrainerOptions(savedTrainerProfiles);
+    const init = async () => {
+      await loadEngagements();
+      await refreshLookups();
+      try {
+        const trainersRes = await trainerAPI.getAll();
+        const trainerRows = (Array.isArray(trainersRes.data) ? trainersRes.data : []).map((item) => ({
+          id: item._id,
+          trainerName: item.fullName || item.trainerName || '',
+          userProfile: {
+            email: item.email || '',
+            phone: item.phone || ''
+          }
+        }));
+        setTrainerOptions(trainerRows);
+      } catch {
+        setTrainerOptions([]);
+      }
+    };
+
+    init();
   }, []);
 
   const handleField = (key, value) => {
@@ -263,12 +357,32 @@ function TrainingEngagementsHub({ user }) {
       if (key === 'startDate' && next.endDate && value > next.endDate) {
         next.endDate = value;
       }
-      if (key === 'trainerId') {
-        const found = trainerOptions.find((item) => item.id === value);
-        next.trainerName = found ? found.trainerName : '';
-      }
       return next;
     });
+  };
+
+  const handleTrainerSelect = async (trainerId) => {
+    const found = trainerOptions.find((item) => item.id === trainerId);
+    setForm((prev) => ({
+      ...prev,
+      trainerId,
+      trainerName: found ? found.trainerName : ''
+    }));
+
+    if (!trainerId) return;
+
+    try {
+      const res = await trainingEngagementAPI.getTrainerDefaults(trainerId);
+      const defaults = res?.data?.defaults || {};
+      setForm((prev) => ({
+        ...prev,
+        dailyHours: defaults.dailyHours === null || defaults.dailyHours === undefined ? prev.dailyHours : String(defaults.dailyHours),
+        learners: defaults.learners === null || defaults.learners === undefined ? prev.learners : String(defaults.learners),
+        ratePerDay: defaults.ratePerDay === null || defaults.ratePerDay === undefined ? prev.ratePerDay : String(defaults.ratePerDay)
+      }));
+    } catch {
+      // Keep entered values if defaults cannot be fetched.
+    }
   };
 
   const handleBulkDateInput = (value) => {
@@ -307,7 +421,7 @@ function TrainingEngagementsHub({ user }) {
   const resolvedCollege = form.college === 'Other College' ? form.customCollege.trim() : form.college;
   const resolvedOrg = form.organization === 'Other / External' ? form.customOrganization.trim() : form.organization;
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     if (!resolvedTopic) {
       window.alert('Please select a topic.');
@@ -326,6 +440,27 @@ function TrainingEngagementsHub({ user }) {
       return;
     }
 
+    if (!form.trainerId) {
+      window.alert('Please select a trainer to create the engagement in database.');
+      return;
+    }
+
+    const institution = institutionRows.find((x) => (x.name || '').trim().toLowerCase() === resolvedCollege.toLowerCase());
+    const client = clientRows.find((x) => (x.name || '').trim().toLowerCase() === resolvedOrg.toLowerCase());
+
+    let institutionId = institution?._id;
+    let clientId = client?._id;
+
+    if (!institutionId) {
+      const createdInstitution = await institutionAPI.create({ name: resolvedCollege });
+      institutionId = createdInstitution?.data?._id;
+    }
+
+    if (!clientId) {
+      const createdClient = await clientAPI.create({ name: resolvedOrg });
+      clientId = createdClient?.data?._id;
+    }
+
     const effectiveDates = getEffectiveDates(form);
     const totalDays = effectiveDates.length;
     const rate = Number(form.ratePerDay || 0);
@@ -335,56 +470,41 @@ function TrainingEngagementsHub({ user }) {
     const netAmount = grossAmount - tdsAmount;
     const effectiveRange = getDateRangeFromDates(effectiveDates);
 
-    const record = {
-      id: editId || Date.now().toString(),
-      topic: resolvedTopic,
-      engagementType: form.engagementType,
-      trainerId: form.trainerId || '',
-      trainerName: form.trainerName || '',
-      college: resolvedCollege,
-      organization: resolvedOrg,
-      dateMode: 'selected',
+    const payload = {
+      institutionId,
+      clientId,
+      engagementTitle: form.engagementType,
       startDate: effectiveRange.startDate,
       endDate: effectiveRange.endDate,
       selectedDates: effectiveDates,
-      totalDays,
       dailyHours: Number(form.dailyHours || 0),
       learners: Number(form.learners || 0),
-      ratePerDay: rate,
-      grossAmount,
+      trainers: [
+        {
+          trainerId: form.trainerId,
+          trainingTopic: resolvedTopic,
+          subjectArea: resolvedTopic,
+          dailyRate: rate
+        }
+      ],
       tdsApplicable,
       tdsPercent: DEFAULT_TDS_PERCENT,
       tdsAmount,
-      totalAmount: netAmount,
+      status: form.paymentStatus,
       notes: form.notes,
-      paymentStatus: form.paymentStatus,
-      ownerSuperadminId:
-        (user?.role === 'superadmin' || user?.role === 'platform_owner')
-          ? user?.id
-          : getEmployeeConnectionContext(user, form.connectionId)?.superadminId || '',
-      connectionId:
-        (user?.role === 'superadmin' || user?.role === 'platform_owner')
-          ? (form.connectionId || getUserDefaultConnection(user))
-          : getEmployeeConnectionContext(user, form.connectionId)?.connectionId || '',
-      sourcedByUserId: user?.id || '',
-      paidDate:
-        form.paymentStatus === 'Paid'
-          ? (editId
-              ? engagements.find((x) => x.id === editId)?.paidDate || new Date().toISOString().slice(0, 10)
-              : new Date().toISOString().slice(0, 10))
-          : '',
+      connectionId: form.connectionId || getUserDefaultConnection(user),
       sourcedBy: form.sourcedBy || '',
-      sourcedByName: form.sourcedByName || '',
-      createdAt: editId
-        ? engagements.find((x) => x.id === editId)?.createdAt || new Date().toISOString()
-        : new Date().toISOString()
+      sourcedByName: form.sourcedByName || ''
     };
 
-    const next = editId
-      ? engagements.map((x) => (x.id === editId ? record : x))
-      : [record, ...engagements];
+    if (editId) {
+      await trainingEngagementAPI.update(editId, payload);
+    } else {
+      await trainingEngagementAPI.create(payload);
+    }
 
-    persist(next);
+    await loadEngagements();
+    await refreshLookups();
     if (resolvedTopic && !topicOptions.includes(resolvedTopic)) {
       setTopicOptions((prev) => [resolvedTopic, ...prev]);
     }
@@ -450,7 +570,11 @@ function TrainingEngagementsHub({ user }) {
 
   const handleDelete = (id) => {
     if (!window.confirm('Delete this training engagement?')) return;
-    persist(engagements.filter((x) => x.id !== id));
+    trainingEngagementAPI.delete(id)
+      .then(() => loadEngagements())
+      .catch((err) => {
+        window.alert(err?.response?.data?.message || 'Unable to delete training engagement');
+      });
   };
 
   const toggleSelectId = (id) => {
@@ -663,7 +787,7 @@ function TrainingEngagementsHub({ user }) {
 
               <div className="form-group">
                 <label>Trainer / Instructor</label>
-                <select className="form-control" value={form.trainerId} onChange={(e) => handleField('trainerId', e.target.value)}>
+                <select className="form-control" value={form.trainerId} onChange={(e) => handleTrainerSelect(e.target.value)}>
                   <option value="">-- Select Trainer (optional) --</option>
                   {trainerOptions.map((item) => (
                     <option key={item.id} value={item.id}>

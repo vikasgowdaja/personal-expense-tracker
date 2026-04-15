@@ -126,6 +126,52 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
+// ── GET latest defaults by trainer ──
+// Returns last known dailyHours, learners, and ratePerDay for quick form prefill.
+router.get('/defaults/trainer/:trainerId', auth, async (req, res) => {
+  try {
+    const userDoc = await getUserWithConnections(req.user.id);
+    if (!userDoc) {
+      return res.status(401).json({ message: 'User not found for scope resolution' });
+    }
+
+    const trainerId = req.params.trainerId;
+    const filter = mergeScopeAndFilters(await buildEngagementScope(userDoc), {
+      'trainers.trainerId': trainerId
+    });
+
+    const row = await TrainingEngagement.findOne(filter)
+      .sort({ startDate: -1, createdAt: -1 })
+      .lean();
+
+    if (!row) {
+      return res.json({
+        found: false,
+        defaults: {
+          dailyHours: null,
+          learners: null,
+          ratePerDay: null
+        }
+      });
+    }
+
+    const assignment = (row.trainers || []).find((t) => String(t.trainerId) === String(trainerId));
+
+    return res.json({
+      found: true,
+      defaults: {
+        dailyHours: Number(row.dailyHours || 0),
+        learners: Number(row.learners || 0),
+        ratePerDay: Number(assignment?.dailyRate || 0)
+      },
+      sourceEngagementId: row._id
+    });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+});
+
 // ── POST create engagement ──
 router.post(
   '/',
@@ -136,6 +182,7 @@ router.post(
       body('clientId', 'clientId is required').not().isEmpty(),
       body('startDate', 'startDate is required').isISO8601(),
       body('endDate', 'endDate is required').isISO8601(),
+      body('selectedDates').optional().isArray(),
       body('trainers', 'At least one trainer assignment is required').isArray({ min: 1 }),
       body('trainers.*.trainerId', 'Each trainer assignment must have a trainerId').not().isEmpty(),
       body('trainers.*.dailyRate', 'Each trainer dailyRate must be >= 0').isFloat({ min: 0 })
@@ -196,12 +243,18 @@ router.post(
         engagementTitle: req.body.engagementTitle || '',
         startDate: req.body.startDate,
         endDate: req.body.endDate,
+        selectedDates: Array.isArray(req.body.selectedDates) ? req.body.selectedDates : [],
+        dailyHours: Number(req.body.dailyHours || 0),
+        learners: Number(req.body.learners || 0),
         trainers: (req.body.trainers || []).map((t) => ({
           trainerId: t.trainerId,
           subjectArea: t.subjectArea || '',
           trainingTopic: t.trainingTopic || '',
           dailyRate: Number(t.dailyRate || 0)
         })),
+        tdsApplicable: req.body.tdsApplicable !== false,
+        tdsPercent: Number(req.body.tdsPercent || 10),
+        tdsAmount: Number(req.body.tdsAmount || 0),
         status: req.body.status || 'Planned',
         notes: req.body.notes || '',
         sourcedBy: req.body.sourcedBy || '',
@@ -241,7 +294,7 @@ router.put('/:id', auth, async (req, res) => {
       }
     }
 
-    const scalarFields = ['institutionId', 'clientId', 'engagementTitle', 'startDate', 'endDate', 'status', 'notes', 'sourcedBy', 'sourcedByName'];
+    const scalarFields = ['institutionId', 'clientId', 'engagementTitle', 'startDate', 'endDate', 'selectedDates', 'dailyHours', 'learners', 'tdsApplicable', 'tdsPercent', 'tdsAmount', 'status', 'notes', 'sourcedBy', 'sourcedByName'];
     scalarFields.forEach((field) => {
       if (req.body[field] !== undefined) {
         row[field] = req.body[field];

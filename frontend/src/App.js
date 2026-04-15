@@ -23,6 +23,11 @@ import FinancialDashboard from './components/Dashboard/FinancialDashboard';
 import EmployeeManager from './components/Admin/EmployeeManager';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import { authAPI } from './services/api';
+import { DB_BACKED_KEYS, initDbBackedStorage } from './services/dbBackedStorage';
+
+function clearDbBackedLocalCache() {
+  DB_BACKED_KEYS.forEach((key) => localStorage.removeItem(key));
+}
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -94,11 +99,13 @@ function App() {
           localStorage.removeItem('token');
           localStorage.removeItem('refreshToken');
           localStorage.removeItem('user');
+          clearDbBackedLocalCache();
         }
       } else {
         // No tokens at all — clear stale user data
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        clearDbBackedLocalCache();
       }
 
       setLoading(false);
@@ -106,6 +113,11 @@ function App() {
 
     restoreSession();
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    initDbBackedStorage();
+  }, [isAuthenticated]);
 
   const handleLogin = (token, userData, refreshToken) => {
     localStorage.setItem('token', token);
@@ -120,6 +132,7 @@ function App() {
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    clearDbBackedLocalCache();
     setIsAuthenticated(false);
     setUser(null);
   };

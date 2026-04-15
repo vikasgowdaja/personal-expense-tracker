@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { institutionAPI } from '../../services/api';
+import { institutionAPI, trainingEngagementAPI } from '../../services/api';
 
 const EMPTY_FORM = {
   name: '',
@@ -15,17 +15,18 @@ function Colleges() {
   const [editId, setEditId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [engagements, setEngagements] = useState(() =>
-    JSON.parse(localStorage.getItem('training_engagements') || '[]')
-  );
+  const [engagements, setEngagements] = useState([]);
 
   const loadColleges = async () => {
     try {
       setLoading(true);
       setError('');
-      const res = await institutionAPI.getAll();
-      setColleges(res.data || []);
-      setEngagements(JSON.parse(localStorage.getItem('training_engagements') || '[]'));
+      const [collegesRes, engagementsRes] = await Promise.all([
+        institutionAPI.getAll(),
+        trainingEngagementAPI.getAll()
+      ]);
+      setColleges(collegesRes.data || []);
+      setEngagements(Array.isArray(engagementsRes.data) ? engagementsRes.data : []);
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to load colleges');
     } finally {

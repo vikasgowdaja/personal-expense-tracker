@@ -179,9 +179,17 @@ export const topicAPI = {
 export const trainingEngagementAPI = {
   getAll: (status) => api.get('/training-engagements', { params: status ? { status } : {} }),
   getById: (id) => api.get(`/training-engagements/${id}`),
+  getTrainerDefaults: (trainerId) => api.get(`/training-engagements/defaults/trainer/${trainerId}`),
   create: (data) => api.post('/training-engagements', data),
   update: (id, data) => api.put(`/training-engagements/${id}`, data),
   delete: (id) => api.delete(`/training-engagements/${id}`)
+};
+
+export const trainerSettlementAPI = {
+  getAll: (params = {}) => api.get('/trainer-settlements', { params }),
+  create: (data) => api.post('/trainer-settlements', data),
+  update: (id, data) => api.put(`/trainer-settlements/${id}`, data),
+  delete: (id) => api.delete(`/trainer-settlements/${id}`)
 };
 
 export const invoiceAPI = {
@@ -211,6 +219,13 @@ export const employeeAPI = {
   updateConnection: (id, connectionId, isActive) => api.patch(`/employees/${id}/connection`, { connectionId, isActive }),
   promoteRole: (id, role) => api.patch(`/employees/${id}/role`, { role }),
   remove: (id) => api.delete(`/employees/${id}`)
+};
+
+export const userDataAPI = {
+  getAll: (keys = []) => api.get('/user-data', { params: keys.length ? { keys: keys.join(',') } : {} }),
+  upsert: (key, payload) => api.put(`/user-data/${encodeURIComponent(key)}`, { payload }),
+  bulkUpsert: (items) => api.post('/user-data/bulk-upsert', { items }),
+  remove: (key) => api.delete(`/user-data/${encodeURIComponent(key)}`)
 };
 
 export default api;
