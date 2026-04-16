@@ -1,0 +1,9 @@
+# Keep deployment package small and avoid status polling failures
+node_modules
+uploads
+.git
+.github
+.vscode
+.env
+npm-debug.log*
+Dockerfile

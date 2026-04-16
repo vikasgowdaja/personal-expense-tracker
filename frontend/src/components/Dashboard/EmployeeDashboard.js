@@ -201,12 +201,6 @@ function EmployeeDashboard({ user }) {
     [engagements]
   );
 
-  function saveTarget() {
-    const val = Number(targetInput.replace(/[^0-9]/g, ''));
-    if (val > 0) setTarget(val);
-    setEditingTarget(false);
-  }
-
   const TABS = [
     { id: 'engagements', label: 'Engagements' },
     { id: 'colleges', label: 'Colleges' },
