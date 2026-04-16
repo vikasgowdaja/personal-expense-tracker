@@ -35,6 +35,28 @@ jobs:
             ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-backend:${{ github.sha }}
             ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-backend:latest
 
+      - name: Validate Backend Web App Target
+        shell: bash
+        env:
+          WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_BACKEND_NAME }}
+        run: |
+          if [ -z "$WEBAPP_NAME" ]; then
+            echo "::error::Missing secret AZURE_WEBAPP_BACKEND_NAME."
+            exit 1
+          fi
+
+          SUB_NAME=$(az account show --query name -o tsv)
+          SUB_ID=$(az account show --query id -o tsv)
+          echo "Using subscription: $SUB_NAME ($SUB_ID)"
+          echo "Backend target app-name: $WEBAPP_NAME"
+
+          MATCH_COUNT=$(az webapp list --query "[?name=='$WEBAPP_NAME'] | length(@)" -o tsv)
+          if [ "$MATCH_COUNT" = "0" ]; then
+            echo "::error::Azure Web App '$WEBAPP_NAME' was not found in the current subscription."
+            echo "::error::Fix AZURE_WEBAPP_BACKEND_NAME or update AZURE_CREDENTIALS to the correct subscription."
+            exit 1
+          fi
+
       - name: Deploy Backend to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
@@ -71,6 +93,28 @@ jobs:
           tags: |
             ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-frontend:${{ github.sha }}
             ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-frontend:latest
+
+      - name: Validate Frontend Web App Target
+        shell: bash
+        env:
+          WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_FRONTEND_NAME }}
+        run: |
+          if [ -z "$WEBAPP_NAME" ]; then
+            echo "::error::Missing secret AZURE_WEBAPP_FRONTEND_NAME."
+            exit 1
+          fi
+
+          SUB_NAME=$(az account show --query name -o tsv)
+          SUB_ID=$(az account show --query id -o tsv)
+          echo "Using subscription: $SUB_NAME ($SUB_ID)"
+          echo "Frontend target app-name: $WEBAPP_NAME"
+
+          MATCH_COUNT=$(az webapp list --query "[?name=='$WEBAPP_NAME'] | length(@)" -o tsv)
+          if [ "$MATCH_COUNT" = "0" ]; then
+            echo "::error::Azure Web App '$WEBAPP_NAME' was not found in the current subscription."
+            echo "::error::Fix AZURE_WEBAPP_FRONTEND_NAME or update AZURE_CREDENTIALS to the correct subscription."
+            exit 1
+          fi
 
       - name: Deploy Frontend to Azure Web App
         uses: azure/webapps-deploy@v3

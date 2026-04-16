@@ -21,7 +21,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL:-http://localhost:5000/api}
+        REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL:-https://backend-personal-ops-feg6cagkdjf0hmcz.canadacentral-01.azurewebsites.net/api}
     image: personal-ops-frontend:local
     depends_on:
       - backend
