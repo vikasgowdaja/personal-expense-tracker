@@ -2,6 +2,15 @@ import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_API_BASE_URL || '/api';
 
+function emitFinancialSync(type, payload = {}) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.dispatchEvent(new CustomEvent('ops-financial-sync', { detail: { type, ...payload, ts: Date.now() } }));
+  } catch {
+    // Ignore event dispatch failures.
+  }
+}
+
 // Create axios instance
 const api = axios.create({
   baseURL: API_URL,
@@ -124,9 +133,18 @@ export const authAPI = {
 export const expenseAPI = {
   getAll: () => api.get('/expenses'),
   getById: (id) => api.get(`/expenses/${id}`),
-  create: (expenseData) => api.post('/expenses', expenseData),
-  update: (id, expenseData) => api.put(`/expenses/${id}`, expenseData),
-  delete: (id) => api.delete(`/expenses/${id}`),
+  create: (expenseData) => api.post('/expenses', expenseData).then((res) => {
+    emitFinancialSync('expense:create');
+    return res;
+  }),
+  update: (id, expenseData) => api.put(`/expenses/${id}`, expenseData).then((res) => {
+    emitFinancialSync('expense:update', { id });
+    return res;
+  }),
+  delete: (id) => api.delete(`/expenses/${id}`).then((res) => {
+    emitFinancialSync('expense:delete', { id });
+    return res;
+  }),
   getStats: () => api.get('/expenses/stats/summary')
 };
 
@@ -180,17 +198,38 @@ export const trainingEngagementAPI = {
   getAll: (status) => api.get('/training-engagements', { params: status ? { status } : {} }),
   getById: (id) => api.get(`/training-engagements/${id}`),
   getTrainerDefaults: (trainerId) => api.get(`/training-engagements/defaults/trainer/${trainerId}`),
-  create: (data) => api.post('/training-engagements', data),
-  update: (id, data) => api.put(`/training-engagements/${id}`, data),
-  markOrgPaid: (id, data = {}) => api.post(`/training-engagements/${id}/mark-org-paid`, data),
-  delete: (id) => api.delete(`/training-engagements/${id}`)
+  create: (data) => api.post('/training-engagements', data).then((res) => {
+    emitFinancialSync('engagement:create');
+    return res;
+  }),
+  update: (id, data) => api.put(`/training-engagements/${id}`, data).then((res) => {
+    emitFinancialSync('engagement:update', { id });
+    return res;
+  }),
+  markOrgPaid: (id, data = {}) => api.post(`/training-engagements/${id}/mark-org-paid`, data).then((res) => {
+    emitFinancialSync('engagement:mark-org-paid', { id });
+    return res;
+  }),
+  delete: (id) => api.delete(`/training-engagements/${id}`).then((res) => {
+    emitFinancialSync('engagement:delete', { id });
+    return res;
+  })
 };
 
 export const trainerSettlementAPI = {
   getAll: (params = {}) => api.get('/trainer-settlements', { params }),
-  create: (data) => api.post('/trainer-settlements', data),
-  update: (id, data) => api.put(`/trainer-settlements/${id}`, data),
-  delete: (id) => api.delete(`/trainer-settlements/${id}`)
+  create: (data) => api.post('/trainer-settlements', data).then((res) => {
+    emitFinancialSync('settlement:create');
+    return res;
+  }),
+  update: (id, data) => api.put(`/trainer-settlements/${id}`, data).then((res) => {
+    emitFinancialSync('settlement:update', { id });
+    return res;
+  }),
+  delete: (id) => api.delete(`/trainer-settlements/${id}`).then((res) => {
+    emitFinancialSync('settlement:delete', { id });
+    return res;
+  })
 };
 
 export const cycleTrackingAPI = {

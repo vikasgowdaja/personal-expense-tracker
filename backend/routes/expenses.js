@@ -64,7 +64,22 @@ router.post('/', [auth, [
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { title, amount, category, date, description } = req.body;
+  const {
+    title,
+    amount,
+    category,
+    date,
+    description,
+    entryType,
+    expenseScope,
+    paymentState,
+    dueDate,
+    paidDate,
+    outstandingAmount,
+    linkedEngagementId,
+    linkedTrainerName,
+    paymentMethod
+  } = req.body;
 
   try {
     const newExpense = new Expense({
@@ -73,7 +88,16 @@ router.post('/', [auth, [
       amount,
       category,
       date: date || Date.now(),
-      description
+      description,
+      entryType: entryType || 'expense',
+      expenseScope: expenseScope || 'general',
+      paymentState: paymentState || 'paid',
+      dueDate: dueDate || undefined,
+      paidDate: paidDate || undefined,
+      outstandingAmount: Number(outstandingAmount || 0),
+      linkedEngagementId,
+      linkedTrainerName,
+      paymentMethod
     });
 
     const expense = await newExpense.save();
@@ -88,15 +112,39 @@ router.post('/', [auth, [
 // @desc    Update expense
 // @access  Private
 router.put('/:id', auth, async (req, res) => {
-  const { title, amount, category, date, description } = req.body;
+  const {
+    title,
+    amount,
+    category,
+    date,
+    description,
+    entryType,
+    expenseScope,
+    paymentState,
+    dueDate,
+    paidDate,
+    outstandingAmount,
+    linkedEngagementId,
+    linkedTrainerName,
+    paymentMethod
+  } = req.body;
 
   // Build expense object
   const expenseFields = {};
-  if (title) expenseFields.title = title;
-  if (amount) expenseFields.amount = amount;
-  if (category) expenseFields.category = category;
-  if (date) expenseFields.date = date;
+  if (title !== undefined) expenseFields.title = title;
+  if (amount !== undefined) expenseFields.amount = amount;
+  if (category !== undefined) expenseFields.category = category;
+  if (date !== undefined) expenseFields.date = date;
   if (description !== undefined) expenseFields.description = description;
+  if (entryType !== undefined) expenseFields.entryType = entryType;
+  if (expenseScope !== undefined) expenseFields.expenseScope = expenseScope;
+  if (paymentState !== undefined) expenseFields.paymentState = paymentState;
+  if (dueDate !== undefined) expenseFields.dueDate = dueDate || null;
+  if (paidDate !== undefined) expenseFields.paidDate = paidDate || null;
+  if (outstandingAmount !== undefined) expenseFields.outstandingAmount = Number(outstandingAmount || 0);
+  if (linkedEngagementId !== undefined) expenseFields.linkedEngagementId = linkedEngagementId;
+  if (linkedTrainerName !== undefined) expenseFields.linkedTrainerName = linkedTrainerName;
+  if (paymentMethod !== undefined) expenseFields.paymentMethod = paymentMethod;
 
   try {
     let expense = await Expense.findById(req.params.id);

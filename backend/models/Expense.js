@@ -21,6 +21,51 @@ const expenseSchema = new mongoose.Schema({
     required: true,
     enum: ['Food', 'Transport', 'Entertainment', 'Shopping', 'Bills', 'Healthcare', 'Other']
   },
+  entryType: {
+    type: String,
+    enum: ['expense', 'debt', 'credit_card_bill'],
+    default: 'expense'
+  },
+  expenseScope: {
+    type: String,
+    enum: [
+      'general',
+      'trainer_settlement',
+      'trainer_hotel',
+      'trainer_food',
+      'trainer_travel',
+      'trainer_other'
+    ],
+    default: 'general'
+  },
+  paymentState: {
+    type: String,
+    enum: ['pending', 'partially_paid', 'paid'],
+    default: 'paid'
+  },
+  dueDate: {
+    type: Date
+  },
+  paidDate: {
+    type: Date
+  },
+  outstandingAmount: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  linkedEngagementId: {
+    type: String,
+    trim: true
+  },
+  linkedTrainerName: {
+    type: String,
+    trim: true
+  },
+  paymentMethod: {
+    type: String,
+    trim: true
+  },
   date: {
     type: Date,
     default: Date.now

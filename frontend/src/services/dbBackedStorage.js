@@ -14,6 +14,17 @@ let nativeSetItem = null;
 let nativeRemoveItem = null;
 const syncTimers = new Map();
 
+function emitDataChanged(key, source) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.dispatchEvent(new CustomEvent('ops-data-changed', {
+      detail: { key, source, ts: Date.now() }
+    }));
+  } catch {
+    // Ignore event dispatch failures.
+  }
+}
+
 function hasAuthToken() {
   return Boolean(localStorage.getItem('token'));
 }
@@ -30,11 +41,7 @@ function parseLocalValue(raw) {
 function writeLocalWithoutSync(key, value) {
   if (!nativeSetItem) return;
   nativeSetItem.call(localStorage, key, value);
-}
-
-function removeLocalWithoutSync(key) {
-  if (!nativeRemoveItem) return;
-  nativeRemoveItem.call(localStorage, key);
+  emitDataChanged(key, 'hydrate');
 }
 
 function scheduleSync(key, rawValue) {
@@ -86,6 +93,9 @@ export async function initDbBackedStorage() {
 
     storageProto.setItem = function setItemPatched(key, value) {
       nativeSetItem.call(this, key, value);
+      if (this === window.localStorage && DB_BACKED_KEYS.includes(String(key))) {
+        emitDataChanged(String(key), 'local-set');
+      }
       if (this === window.localStorage && !isHydrating) {
         scheduleSync(String(key), value);
       }
@@ -93,6 +103,9 @@ export async function initDbBackedStorage() {
 
     storageProto.removeItem = function removeItemPatched(key) {
       nativeRemoveItem.call(this, key);
+      if (this === window.localStorage && DB_BACKED_KEYS.includes(String(key))) {
+        emitDataChanged(String(key), 'local-remove');
+      }
       if (this === window.localStorage && !isHydrating && DB_BACKED_KEYS.includes(String(key)) && hasAuthToken()) {
         userDataAPI.remove(String(key)).catch(() => {
           // Best effort delete; local key is already removed.

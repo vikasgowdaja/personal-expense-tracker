@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+
+const SIDEBAR_COLLAPSED_KEY = 'ops_sidebar_collapsed';
 
 const BASE_NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: 'home' },
@@ -15,6 +17,7 @@ const SUPERADMIN_NAV_ITEMS = [
   { to: '/insights', label: 'Insights', icon: 'insights' },
   { to: '/financial', label: 'Financial Reports', icon: 'financial' },
   { to: '/finance', label: 'Payments', icon: 'payments' },
+  { to: '/expenses', label: 'Expenses & Debts', icon: 'log' },
   { to: '/trainer-settlements', label: 'Trainer Settlement', icon: 'payments' },
   { to: '/employees', label: 'Employees', icon: 'employees' }
 ];
@@ -136,6 +139,7 @@ function Icon({ name }) {
 
 function AppShell({ user, onLogout }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const isPrivileged = user?.role === 'superadmin' || user?.role === 'platform_owner';
   const navItems = isPrivileged
     ? [...BASE_NAV_ITEMS, ...SUPERADMIN_NAV_ITEMS]
@@ -150,6 +154,14 @@ function AppShell({ user, onLogout }) {
   const profilePhoto = user?.profilePhoto || '';
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -157,34 +169,66 @@ function AppShell({ user, onLogout }) {
         setIsProfileMenuOpen(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Lock body scroll while drawer is open on mobile
+  useEffect(() => {
+    document.body.style.overflow = drawerOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [drawerOpen]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? '1' : '0');
+    } catch {
+      // Ignore storage failures (private mode/disabled storage).
+    }
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    // Close temporary overlays after route changes.
+    setDrawerOpen(false);
+    setIsProfileMenuOpen(false);
+  }, [location.pathname]);
+
   return (
-    <div className="ops-shell">
-      <aside className="ops-sidebar">
+    <div className={`ops-shell${sidebarCollapsed ? ' ops-shell-collapsed' : ''}`}>
+      {/* ── Drawer backdrop (mobile only) ── */}
+      {drawerOpen && (
+        <div
+          className="ops-drawer-backdrop"
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* ── Sidebar / Drawer ── */}
+      <aside className={`ops-sidebar${drawerOpen ? ' ops-sidebar-open' : ''}${sidebarCollapsed ? ' ops-sidebar-collapsed' : ''}`}>
+
+        {/* ── Desktop collapse/expand toggle is at sidebar footer – see below ── */}
+
+        {/* Close button inside drawer (mobile only) */}
+        <button
+          className="ops-drawer-close"
+          onClick={() => setDrawerOpen(false)}
+          aria-label="Close navigation"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+
         <div className="ops-brand">
-          <img
-            className="ops-brand-logo"
-            src="/Infinite8.png"
-            alt="Infinite8 logo"
-          />
+          <img className="ops-brand-logo" src="/Infinite8.png" alt="Infinite8 logo" />
         </div>
 
         {isPrivileged && (
-          <div style={{ padding: '4px 16px', marginBottom: '8px' }}>
-            <span style={{
-              display: 'inline-block',
-              background: '#7c3aed',
-              color: '#fff',
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 700,
-              padding: '2px 8px',
-              letterSpacing: '0.05em'
-            }}>{user?.role === 'platform_owner' ? 'PLATFORM OWNER' : 'SUPER ADMIN'}</span>
+          <div className="ops-role-badge">
+            <span className="ops-role-badge-text">
+              {user?.role === 'platform_owner' ? 'PLATFORM OWNER' : 'SUPER ADMIN'}
+            </span>
           </div>
         )}
 
@@ -196,23 +240,53 @@ function AppShell({ user, onLogout }) {
               className={({ isActive }) =>
                 isActive ? 'ops-nav-item ops-nav-item-active' : 'ops-nav-item'
               }
+              onClick={() => setDrawerOpen(false)}
+              title={sidebarCollapsed ? item.label : ''}
             >
               <Icon name={item.icon} />
-              <span>{item.label}</span>
+              <span className="ops-nav-label">{item.label}</span>
             </NavLink>
           ))}
         </nav>
 
         <div className="ops-sidebar-footer">
-          <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>
+          <div className="ops-sidebar-footer-text">
             {user?.name} &bull; {user?.role}
           </div>
+          {/* Desktop collapse toggle - bottom of sidebar */}
+          <button
+            type="button"
+            className="ops-collapse-toggle"
+            onClick={() => setSidebarCollapsed((c) => !c)}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-pressed={sidebarCollapsed}
+            title={sidebarCollapsed ? 'Expand' : 'Collapse'}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {sidebarCollapsed
+                ? <path d="M9 18l6-6-6-6" />
+                : <path d="M15 18l-6-6 6-6" />}
+            </svg>
+            <span className="ops-nav-label" style={{ marginLeft: 6 }}>
+              {sidebarCollapsed ? 'Expand' : 'Collapse'}
+            </span>
+          </button>
         </div>
       </aside>
 
       <div className="ops-main">
         <header className="ops-header">
           <div className="ops-header-content">
+            {/* Hamburger – visible on mobile only */}
+            <button
+              className="ops-hamburger"
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Open navigation"
+            >
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
             <div className="ops-header-title">Dashboard</div>
             <div className="ops-header-actions" ref={profileMenuRef}>
               <button

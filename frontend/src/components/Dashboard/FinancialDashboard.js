@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { trainerSettlementAPI, trainingEngagementAPI } from '../../services/api';
 
 const DEFAULT_TDS_PERCENT = 10;
 
@@ -20,6 +21,48 @@ function parseEngagementNet(row) {
   return Number(row.totalAmount !== undefined ? row.totalAmount : gross - tds);
 }
 
+function normalizeApiEngagement(row) {
+  const firstTrainer = Array.isArray(row.trainers) && row.trainers.length > 0 ? row.trainers[0] : null;
+  const trainerDoc = firstTrainer?.trainerId;
+  return {
+    id: row._id,
+    trainerId: trainerDoc?._id || firstTrainer?.trainerId || '',
+    trainerName: trainerDoc?.fullName || '',
+    college: row.institutionId?.name || '',
+    organization: row.clientId?.name || '',
+    startDate: row.startDate || '',
+    endDate: row.endDate || '',
+    totalDays: Number(row.totalDays || 0),
+    paymentStatus: row.status || 'Invoiced',
+    topic: firstTrainer?.trainingTopic || row.engagementTitle || row.notes || 'Training',
+    notes: row.notes || '',
+    ratePerDay: Number(firstTrainer?.dailyRate || 0),
+    grossAmount: Number(row.grossAmount !== undefined ? row.grossAmount : row.totalAmount || 0),
+    tdsApplicable: row.tdsApplicable !== false,
+    tdsAmount: Number(row.tdsAmount || 0),
+    totalAmount: Number(row.totalAmount || 0),
+    ownerSuperadminId: row.ownerSuperadminId || '',
+    sourcedByUserId: row.sourcedByUserId || '',
+    sourcedBy: row.sourcedBy || '',
+    sourcedByName: row.sourcedByName || ''
+  };
+}
+
+function normalizeSettlementRow(row) {
+  const trainingId = typeof row.trainingEngagementId === 'object'
+    ? row.trainingEngagementId?._id
+    : row.trainingEngagementId;
+  return {
+    id: row._id,
+    trainingRecordId: trainingId ? String(trainingId) : '',
+    status: row.status || 'Planned',
+    amount: Number(row.amount || 0),
+    paidDate: row.paidDate || null,
+    date: row.date || null,
+    createdAt: row.createdAt || null
+  };
+}
+
 function StatCard({ label, value, color, sub }) {
   return (
     <div style={{
@@ -39,38 +82,86 @@ function StatCard({ label, value, color, sub }) {
 
 function FinancialDashboard({ user }) {
   const [activeTab, setActiveTab] = useState('summary');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [allEngagements, setAllEngagements] = useState([]);
+  const [allSettlements, setAllSettlements] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    const keysToWatch = new Set(['training_engagements', 'trainer_settlements']);
+    const trigger = () => setRefreshKey((v) => v + 1);
+
+    const onStorage = (event) => {
+      if (keysToWatch.has(event.key)) trigger();
+    };
+    const onDataChanged = (event) => {
+      if (keysToWatch.has(event?.detail?.key)) trigger();
+    };
+    const onFinancialSync = () => trigger();
+    const onFocus = () => trigger();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') trigger();
+    };
+
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('ops-data-changed', onDataChanged);
+    window.addEventListener('ops-financial-sync', onFinancialSync);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('ops-data-changed', onDataChanged);
+      window.removeEventListener('ops-financial-sync', onFinancialSync);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const loadLiveData = async () => {
+      setLoading(true);
+      try {
+        const [engagementRes, settlementRes] = await Promise.all([
+          trainingEngagementAPI.getAll(),
+          trainerSettlementAPI.getAll()
+        ]);
+        const engagementRows = Array.isArray(engagementRes.data) ? engagementRes.data : [];
+        const settlementRows = Array.isArray(settlementRes.data) ? settlementRes.data : [];
+        setAllEngagements(engagementRows.map(normalizeApiEngagement));
+        setAllSettlements(settlementRows.map(normalizeSettlementRow));
+      } catch {
+        setAllEngagements([]);
+        setAllSettlements([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadLiveData();
+  }, [refreshKey]);
 
   const engagements = useMemo(() => {
-    try {
-      const all = JSON.parse(localStorage.getItem('training_engagements') || '[]');
-      if (!user) return all;
-      if (user.role === 'platform_owner') {
-        return all;
-      }
-      if (user.role === 'superadmin') {
-        return all.filter((row) => {
-          if (row.ownerSuperadminId) return String(row.ownerSuperadminId) === String(user.id);
-          return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
-        });
-      }
-      return all.filter((row) => {
-        if (row.sourcedByUserId) return String(row.sourcedByUserId) === String(user.id);
+    if (!user) return allEngagements;
+    if (user.role === 'platform_owner') {
+      return allEngagements;
+    }
+    if (user.role === 'superadmin') {
+      return allEngagements.filter((row) => {
+        if (row.ownerSuperadminId) return String(row.ownerSuperadminId) === String(user.id);
         return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
       });
-    } catch {
-      return [];
     }
-  }, [user]);
+    return allEngagements.filter((row) => {
+      if (row.sourcedByUserId) return String(row.sourcedByUserId) === String(user.id);
+      return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
+    });
+  }, [allEngagements, user]);
 
   const settlements = useMemo(() => {
-    try {
-      const all = JSON.parse(localStorage.getItem('trainer_settlements') || '[]');
-      const engagementIds = new Set((engagements || []).map((e) => e.id));
-      return all.filter((s) => !s.trainingRecordId || engagementIds.has(s.trainingRecordId));
-    } catch {
-      return [];
-    }
-  }, [engagements]);
+    const engagementIds = new Set((engagements || []).map((e) => e.id));
+    return allSettlements.filter((s) => !s.trainingRecordId || engagementIds.has(s.trainingRecordId));
+  }, [allSettlements, engagements]);
 
   // ── Core metrics ─────────────────────────────────────────────────────────
   const metrics = useMemo(() => {
@@ -166,6 +257,10 @@ function FinancialDashboard({ user }) {
       marginPct: r.revenue > 0 ? ((r.revenue - r.trainerCost) / r.revenue * 100).toFixed(1) : '0.0'
     }));
   }, [engagements, settlements]);
+
+  if (loading) {
+    return <div className="loading">Loading financial reports...</div>;
+  }
 
   return (
     <div style={{ padding: '24px', maxWidth: '1100px' }}>

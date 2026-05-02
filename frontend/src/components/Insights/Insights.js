@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { expenseAPI } from '../../services/api';
+import { expenseAPI, trainerSettlementAPI, trainingEngagementAPI } from '../../services/api';
 
 const DEFAULT_TDS_PERCENT = 10;
 
@@ -11,6 +11,19 @@ function parsePaymentStatus(description) {
   const tagged = (description || '').match(/PaymentStatus:(pending|received)/i);
   if (tagged) return tagged[1].toLowerCase();
   return (description || '').toLowerCase().includes('pending') ? 'pending' : 'received';
+}
+
+function isDebtExpenseRecord(row) {
+  const entryType = String(row?.entryType || '').toLowerCase();
+  if (entryType === 'debt' || entryType === 'credit_card_bill') return true;
+  const paymentState = String(row?.paymentState || '').toLowerCase();
+  if (paymentState === 'pending' || paymentState === 'partially_paid') {
+    const scope = String(row?.expenseScope || '').toLowerCase();
+    if (scope.startsWith('trainer_') || scope === 'general') return true;
+  }
+  const text = `${row?.title || ''} ${row?.description || ''}`.toLowerCase();
+  if (!text.trim()) return false;
+  return /(credit\s*card|cc\s*bill|card\s*bill|emi|loan|debt|liabilit|interest|minimum\s*due|outstanding)/i.test(text);
 }
 
 function parseEngagementNet(row) {
@@ -29,6 +42,47 @@ function parseEngagementNet(row) {
           : (gross * DEFAULT_TDS_PERCENT) / 100
       );
   return Number(row.totalAmount !== undefined ? row.totalAmount : gross - tds);
+}
+
+function normalizeApiEngagement(row) {
+  const firstTrainer = Array.isArray(row.trainers) && row.trainers.length > 0 ? row.trainers[0] : null;
+  const trainerDoc = firstTrainer?.trainerId;
+  return {
+    id: row._id,
+    trainerId: trainerDoc?._id || firstTrainer?.trainerId || '',
+    trainerName: trainerDoc?.fullName || '',
+    college: row.institutionId?.name || '',
+    organization: row.clientId?.name || '',
+    startDate: row.startDate || '',
+    endDate: row.endDate || '',
+    totalDays: Number(row.totalDays || 0),
+    paymentStatus: row.status || 'Invoiced',
+    topic: firstTrainer?.trainingTopic || row.engagementTitle || row.notes || 'Training',
+    notes: row.notes || '',
+    ratePerDay: Number(firstTrainer?.dailyRate || 0),
+    grossAmount: Number(row.grossAmount !== undefined ? row.grossAmount : row.totalAmount || 0),
+    tdsApplicable: row.tdsApplicable !== false,
+    tdsAmount: Number(row.tdsAmount || 0),
+    totalAmount: Number(row.totalAmount || 0),
+    ownerSuperadminId: row.ownerSuperadminId || '',
+    sourcedByUserId: row.sourcedByUserId || '',
+    sourcedBy: row.sourcedBy || '',
+    sourcedByName: row.sourcedByName || ''
+  };
+}
+
+function normalizeSettlementRow(row) {
+  const trainingId = typeof row.trainingEngagementId === 'object'
+    ? row.trainingEngagementId?._id
+    : row.trainingEngagementId;
+
+  return {
+    id: row._id,
+    trainingRecordId: trainingId ? String(trainingId) : '',
+    status: row.status || 'Planned',
+    amount: Number(row.amount || 0),
+    paidDate: row.paidDate || null
+  };
 }
 
 function ProfitLossBadge({ isProfit, isBreakEven }) {
@@ -99,56 +153,96 @@ function isEngagementVisibleForUser(row, user) {
 function Insights({ user }) {
   const [financeRecords, setFinanceRecords] = useState([]);
   const [loadingFinance, setLoadingFinance] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [logs, setLogs] = useState([]);
+  const [allEngagements, setAllEngagements] = useState([]);
+  const [allSettlements, setAllSettlements] = useState([]);
 
-  const logs = useMemo(() => JSON.parse(localStorage.getItem('daily_logs') || '[]'), []);
-  const engagements = useMemo(() => {
-    const all = JSON.parse(localStorage.getItem('training_engagements') || '[]');
-    return all.filter((row) => isEngagementVisibleForUser(row, user));
-  }, [user]);
-  const settlements = useMemo(() => {
-    const all = JSON.parse(localStorage.getItem('trainer_settlements') || '[]');
-    const engagementIds = new Set(engagements.map((row) => row.id));
+  const triggerRefresh = useCallback(() => {
+    setRefreshKey((v) => v + 1);
+  }, []);
 
-    return all.filter((item) => {
-      if (item.trainingRecordId) {
-        return engagementIds.has(item.trainingRecordId);
-      }
-
-      if (!user) return true;
-
-      if (user.role === 'platform_owner') {
-        return true;
-      }
-
-      if (user.role === 'superadmin') {
-        if (item.ownerSuperadminId) {
-          return String(item.ownerSuperadminId) === String(user.id);
-        }
-        return item.sourcedBy === user.employeeId || item.sourcedByName === user.name;
-      }
-
-      if (item.sourcedByUserId) {
-        return String(item.sourcedByUserId) === String(user.id);
-      }
-      return item.sourcedBy === user.employeeId || item.sourcedByName === user.name;
-    });
-  }, [engagements, user]);
-
-  const loadFinance = useCallback(async () => {
+  const loadFinancialInputs = useCallback(async () => {
     setLoadingFinance(true);
     try {
-      const res = await expenseAPI.getAll();
-      setFinanceRecords(res.data || []);
+      const [expenseRes, engagementRes, settlementRes] = await Promise.all([
+        expenseAPI.getAll(),
+        trainingEngagementAPI.getAll(),
+        trainerSettlementAPI.getAll()
+      ]);
+
+      const expenseRows = Array.isArray(expenseRes.data) ? expenseRes.data : [];
+      const engagementRows = Array.isArray(engagementRes.data) ? engagementRes.data : [];
+      const settlementRows = Array.isArray(settlementRes.data) ? settlementRes.data : [];
+
+      setFinanceRecords(expenseRows);
+      setAllEngagements(engagementRows.map(normalizeApiEngagement));
+      setAllSettlements(settlementRows.map(normalizeSettlementRow));
     } catch {
       setFinanceRecords([]);
+      setAllEngagements([]);
+      setAllSettlements([]);
     } finally {
       setLoadingFinance(false);
     }
   }, []);
 
   useEffect(() => {
-    loadFinance();
-  }, [loadFinance]);
+    try {
+      setLogs(JSON.parse(localStorage.getItem('daily_logs') || '[]'));
+    } catch {
+      setLogs([]);
+    }
+  }, [refreshKey]);
+
+  const engagements = useMemo(() => {
+    return allEngagements.filter((row) => isEngagementVisibleForUser(row, user));
+  }, [allEngagements, user]);
+
+  const settlements = useMemo(() => {
+    const engagementIds = new Set(engagements.map((row) => row.id));
+
+    return allSettlements.filter((item) => {
+      if (item.trainingRecordId) {
+        return engagementIds.has(item.trainingRecordId);
+      }
+
+      return true;
+    });
+  }, [allSettlements, engagements]);
+
+  useEffect(() => {
+    const keysToWatch = new Set(['training_engagements', 'trainer_settlements', 'daily_logs']);
+    const onStorage = (event) => {
+      if (keysToWatch.has(event.key)) triggerRefresh();
+    };
+    const onDataChanged = (event) => {
+      if (keysToWatch.has(event?.detail?.key)) triggerRefresh();
+    };
+    const onFinancialSync = () => triggerRefresh();
+    const onFocus = () => triggerRefresh();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') triggerRefresh();
+    };
+
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('ops-data-changed', onDataChanged);
+    window.addEventListener('ops-financial-sync', onFinancialSync);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('ops-data-changed', onDataChanged);
+      window.removeEventListener('ops-financial-sync', onFinancialSync);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [triggerRefresh]);
+
+  useEffect(() => {
+    loadFinancialInputs();
+  }, [loadFinancialInputs, refreshKey]);
 
   // ── Daily log aggregates ──────────────────────────────────────────────────
   const logAggregate = useMemo(() => {
@@ -186,7 +280,7 @@ function Insights({ user }) {
     const pendingRecoveryFromPayers = payerPendingRows.reduce((sum, row) => sum + parseEngagementNet(row), 0);
     const pendingRecoveryCount = payerPendingRows.length;
 
-    // 3. Finance records split: received = recovered from clients, pending = company paid from pocket but NOT yet recovered
+    // 3. Finance records split: pending = company paid from pocket but NOT yet recovered
     const financeReceived = financeRecords
       .filter((r) => parsePaymentStatus(r.description) === 'received')
       .reduce((sum, r) => sum + Number(r.amount || 0), 0);
@@ -195,11 +289,18 @@ function Insights({ user }) {
       .filter((r) => parsePaymentStatus(r.description) === 'pending')
       .reduce((sum, r) => sum + Number(r.amount || 0), 0);
 
+    const creditCardDebt = financeRecords
+      .filter((r) => isDebtExpenseRecord(r))
+      .reduce((sum, r) => sum + Number(r.amount || 0), 0);
+    const totalExpenses = financeRecords.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+
     // 4. Total money company has paid out (trainers + any pending finance outflows)
     const totalPaidOut = trainersPaid + financePending;
 
-    // 5. Total actually recovered / in hand (finance received records)
-    const totalRecovered = financeReceived;
+    // 5. Source-of-truth recovered cash from organizations (Paid engagements)
+    const totalRecovered = engagements
+      .filter((row) => (row.paymentStatus || 'Invoiced').toLowerCase() === 'paid')
+      .reduce((sum, row) => sum + parseEngagementNet(row), 0);
 
     // 6. Gross margin: what the company earned over trainer cost (based on billings)
     const grossMargin = totalBilled - trainersPaid;
@@ -252,6 +353,14 @@ function Insights({ user }) {
       // 12. Advance exposure: trainer already paid but org hasn't paid the company yet
       const advanceExposureRows = engagementMargins.filter((r) => r.companyOutOfPocket);
       const totalAdvanceExposure = advanceExposureRows.reduce((sum, r) => sum + r.settlementPaid, 0);
+      const advanceExpectedRevenueTotal = advanceExposureRows.reduce((sum, r) => sum + r.netRevenue, 0);
+
+    // 13. Debt clearance and final in-hand projections
+    const expectedRevenueTotal = totalBilled;
+    const totalDebtToClear = pendingSettlementAmount + financePending + creditCardDebt;
+    const ultimateInHandAfterDebtClearance = expectedRevenueTotal - trainersPaid - totalDebtToClear;
+    const receivableAfterDebtClearance = pendingRecoveryFromPayers - totalDebtToClear;
+    const actualLeftAfterTotalExpenses = expectedRevenueTotal - totalExpenses;
 
     return {
       totalBilled,
@@ -268,12 +377,20 @@ function Insights({ user }) {
       grossMarginPct,
       netCashPosition,
       outstandingFromOrgs,
+      creditCardDebt,
+      totalExpenses,
+      expectedRevenueTotal,
+      totalDebtToClear,
+      ultimateInHandAfterDebtClearance,
+      receivableAfterDebtClearance,
+      actualLeftAfterTotalExpenses,
       isProfit,
       isBreakEven,
       recoveryRatio,
         engagementMargins,
         advanceExposureRows,
-        totalAdvanceExposure
+        totalAdvanceExposure,
+        advanceExpectedRevenueTotal
     };
   }, [engagements, settlements, financeRecords]);
 
@@ -300,12 +417,52 @@ function Insights({ user }) {
     return `Company is in profit with a ${grossMarginPct.toFixed(1)}% gross margin (${inr(grossMargin)}). Recovery rate is strong at ${(recoveryRatio * 100).toFixed(1)}%. Continue consistent collection cycles to maintain this trajectory.`;
   }, [profitEngine]);
 
+  const debtRegisterRows = useMemo(() => {
+    return financeRecords
+      .filter((row) => isDebtExpenseRecord(row))
+      .map((row) => ({
+        id: row._id,
+        title: row.title || 'Debt Entry',
+        entryType: row.entryType || 'expense',
+        scope: row.expenseScope || 'general',
+        paymentState: row.paymentState || 'paid',
+        amount: Number(row.amount || 0),
+        outstandingAmount: Number(row.outstandingAmount || 0),
+        dueDate: row.dueDate
+      }))
+      .sort((a, b) => (b.amount || 0) - (a.amount || 0));
+  }, [financeRecords]);
+
   if (loadingFinance) {
     return <div className="loading">Analyzing company financials...</div>;
   }
 
-  const { totalBilled, trainersPaid, pendingSettlementAmount, pendingSettlementCount, pendingRecoveryFromPayers, pendingRecoveryCount, financeReceived, financePending, grossMargin, outstandingFromOrgs, isProfit, isBreakEven, grossMarginPct, engagementMargins, advanceExposureRows, totalAdvanceExposure } = profitEngine;
-
+  const {
+    totalBilled,
+    trainersPaid,
+    pendingSettlementAmount,
+    pendingSettlementCount,
+    pendingRecoveryFromPayers,
+    pendingRecoveryCount,
+    totalRecovered,
+    financePending,
+    grossMargin,
+    outstandingFromOrgs,
+    isProfit,
+    isBreakEven,
+    grossMarginPct,
+    engagementMargins,
+    advanceExposureRows,
+    totalAdvanceExposure,
+    advanceExpectedRevenueTotal,
+    expectedRevenueTotal,
+    creditCardDebt,
+    totalExpenses,
+    totalDebtToClear,
+    ultimateInHandAfterDebtClearance,
+    receivableAfterDebtClearance,
+    actualLeftAfterTotalExpenses
+  } = profitEngine;
   return (
     <section className="ops-page">
       <div className="ops-page-header">
@@ -369,8 +526,11 @@ function Insights({ user }) {
                 </tbody>
                 <tfoot>
                   <tr style={{ borderTop: '2px solid #fca5a5' }}>
-                    <td colSpan={4} style={{ fontWeight: 600, color: '#991b1b' }}>
-                      Total awaiting recovery from payer organizations
+                    <td colSpan={3} style={{ fontWeight: 600, color: '#991b1b' }}>
+                      Total awaiting recovery from payer organizations (Expected Revenue)
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#6b7280' }}>
+                      {inr(advanceExpectedRevenueTotal)}
                     </td>
                     <td style={{ textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>
                       − {inr(totalAdvanceExposure)}
@@ -406,7 +566,7 @@ function Insights({ user }) {
       {/* ── Recovery / Settlement / Exposure Cards ── */}
       <div className="summary-cards dashboard-summary-grid" style={{ marginTop: 14 }}>
         <div className="ops-card summary-card teaching-stat-card received" style={{ borderLeftColor: '#16a34a' }}>
-          <div className="stat-value" style={{ color: '#16a34a' }}>{inr(financeReceived)}</div>
+          <div className="stat-value" style={{ color: '#16a34a' }}>{inr(totalRecovered)}</div>
           <div className="stat-label">Recovered from Client Orgs</div>
           <div className="muted" style={{ marginTop: 6, fontSize: '0.75rem' }}>Cash already received</div>
         </div>
@@ -433,10 +593,97 @@ function Insights({ user }) {
           Recovery Progress — Billed vs Collected
         </h3>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#6b7280', marginBottom: 4 }}>
-          <span>Collected: {inr(financeReceived)}</span>
+          <span>Collected: {inr(totalRecovered)}</span>
           <span>Outstanding from debtors: {inr(outstandingFromOrgs)}</span>
         </div>
-        <RecoveryBar recovered={financeReceived} total={totalBilled} />
+        <RecoveryBar recovered={totalRecovered} total={totalBilled} />
+      </div>
+
+      {/* ── Expected Revenue vs Debts (Ultimate In-Hand) ── */}
+      <div className="ops-card" style={{ marginTop: 14, borderLeft: '4px solid #0f766e', background: '#f0fdfa' }}>
+        <h3 style={{ margin: '0 0 10px', fontSize: '0.95rem', color: '#115e59' }}>
+          Expected Revenue vs Debt Clearance — Ultimate In-Hand
+        </h3>
+        <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: '#0f766e' }}>
+          This shows your expected total collection from organizations and what remains after trainer costs,
+          pending settlements, unrecovered pocket expenses, and credit-card/debt expenses.
+        </p>
+        <div className="summary-cards dashboard-summary-grid">
+          <div className="ops-card summary-card teaching-stat-card accent-blue">
+            <div className="stat-value">{inr(expectedRevenueTotal)}</div>
+            <div className="stat-label">Expected Revenue (Full Collection)</div>
+          </div>
+          <div className="ops-card summary-card teaching-stat-card">
+            <div className="stat-value" style={{ color: '#b91c1c' }}>{inr(totalExpenses)}</div>
+            <div className="stat-label">Total Expenses (From Expenses Page)</div>
+          </div>
+          <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: actualLeftAfterTotalExpenses >= 0 ? '#16a34a' : '#dc2626' }}>
+            <div className="stat-value" style={{ color: actualLeftAfterTotalExpenses >= 0 ? '#16a34a' : '#dc2626' }}>
+              {actualLeftAfterTotalExpenses >= 0 ? '+' : '−'} {inr(Math.abs(actualLeftAfterTotalExpenses))}
+            </div>
+            <div className="stat-label">Actual Left (Expected Revenue − Total Expenses)</div>
+          </div>
+          <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#dc2626' }}>
+            <div className="stat-value" style={{ color: '#dc2626' }}>{inr(creditCardDebt)}</div>
+            <div className="stat-label">Credit Card / Debt Expenses</div>
+          </div>
+          <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#d97706' }}>
+            <div className="stat-value" style={{ color: '#d97706' }}>{inr(totalDebtToClear)}</div>
+            <div className="stat-label">Total Debt to Clear</div>
+          </div>
+          <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: ultimateInHandAfterDebtClearance >= 0 ? '#16a34a' : '#dc2626' }}>
+            <div className="stat-value" style={{ color: ultimateInHandAfterDebtClearance >= 0 ? '#16a34a' : '#dc2626' }}>
+              {ultimateInHandAfterDebtClearance >= 0 ? '+' : '−'} {inr(Math.abs(ultimateInHandAfterDebtClearance))}
+            </div>
+            <div className="stat-label">Ultimate In-Hand After Clearance</div>
+          </div>
+        </div>
+        <div style={{ marginTop: 12, fontSize: '0.82rem', color: '#334155' }}>
+          <strong>Net receivable after debt clearance (from unpaid orgs):</strong> {receivableAfterDebtClearance >= 0 ? '+' : '−'} {inr(Math.abs(receivableAfterDebtClearance))}
+        </div>
+      </div>
+
+      <div className="ops-card" style={{ marginTop: 14 }}>
+        <h3 style={{ margin: '0 0 10px', fontSize: '0.95rem' }}>
+          Debt Register Snapshot
+        </h3>
+        <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: '#6b7280' }}>
+          Credit card bills, debts, and pending out-of-pocket records used in your final in-hand projection.
+        </p>
+        {debtRegisterRows.length > 0 ? (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="ops-table">
+              <thead>
+                <tr>
+                  <th className="sno-th">#</th>
+                  <th>Title</th>
+                  <th>Type</th>
+                  <th>Scope</th>
+                  <th>Payment State</th>
+                  <th style={{ textAlign: 'right' }}>Amount</th>
+                  <th style={{ textAlign: 'right' }}>Outstanding</th>
+                  <th>Due Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {debtRegisterRows.map((row, idx) => (
+                  <tr key={row.id || `${row.title}-${idx}`}>
+                    <td className="sno-cell">{idx + 1}</td>
+                    <td>{row.title}</td>
+                    <td>{String(row.entryType).replace(/_/g, ' ')}</td>
+                    <td>{String(row.scope).replace(/_/g, ' ')}</td>
+                    <td><span className="status-pill pending">{row.paymentState}</span></td>
+                    <td style={{ textAlign: 'right' }}>{inr(row.amount)}</td>
+                    <td style={{ textAlign: 'right', color: row.outstandingAmount > 0 ? '#dc2626' : '#16a34a' }}>{inr(row.outstandingAmount)}</td>
+                    <td>{row.dueDate ? new Date(row.dueDate).toLocaleDateString('en-IN') : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted" style={{ margin: 0 }}>No debt records yet. Add them in Expenses & Debts page.</p>
+        )}
       </div>
 
       {/* ── AI Verdict ── */}
@@ -463,8 +710,8 @@ function Insights({ user }) {
               { label: 'Revenue Billed', value: totalBilled, max: totalBilled, color: '#2563eb' },
               { label: 'Trainer Cost', value: trainersPaid, max: totalBilled, color: '#dc2626' },
               { label: 'Gross Margin', value: Math.max(0, grossMargin), max: totalBilled, color: '#16a34a' },
-              { label: 'Recovered Cash', value: financeReceived, max: totalBilled, color: '#0284c7' },
-              { label: 'Pending Recovery', value: financePending, max: totalBilled, color: '#f59e0b' }
+                { label: 'Recovered Cash', value: totalRecovered, max: totalBilled, color: '#0284c7' },
+                { label: 'Pending Recovery', value: pendingRecoveryFromPayers, max: totalBilled, color: '#f59e0b' }
             ].map((row) => (
               <div key={row.label} className="teaching-bar-row">
                 <span className="teaching-bar-label">{row.label}</span>
