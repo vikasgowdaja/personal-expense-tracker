@@ -29,6 +29,11 @@ async function getUserWithConnections(userId) {
     .lean();
 }
 
+function mergeScopeAndFilters(scope, filters) {
+  if (!filters || Object.keys(filters).length === 0) return scope;
+  return { $and: [scope, filters] };
+}
+
 async function buildTopicScope(userDoc) {
   if (!userDoc) return { _id: null };
 
@@ -133,8 +138,14 @@ router.post('/seed-defaults', auth, async (req, res) => {
 
 router.put('/:id', auth, async (req, res) => {
   try {
+    const userDoc = await getUserWithConnections(req.user.id);
+    if (!userDoc) {
+      return res.status(401).json({ message: 'User not found for scope resolution' });
+    }
+
+    const scope = await buildTopicScope(userDoc);
     const topic = await Topic.findOneAndUpdate(
-      { _id: req.params.id, user: req.user.id },
+      mergeScopeAndFilters(scope, { _id: req.params.id }),
       {
         $set: {
           name: req.body.name,
@@ -161,7 +172,13 @@ router.put('/:id', auth, async (req, res) => {
 
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const topic = await Topic.findOneAndDelete({ _id: req.params.id, user: req.user.id });
+    const userDoc = await getUserWithConnections(req.user.id);
+    if (!userDoc) {
+      return res.status(401).json({ message: 'User not found for scope resolution' });
+    }
+
+    const scope = await buildTopicScope(userDoc);
+    const topic = await Topic.findOneAndDelete(mergeScopeAndFilters(scope, { _id: req.params.id }));
     if (!topic) {
       return res.status(404).json({ message: 'Topic not found' });
     }

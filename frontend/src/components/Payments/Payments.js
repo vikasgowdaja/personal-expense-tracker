@@ -287,13 +287,14 @@ export default function Payments({ user }) {
     loadEngagements();
   }, [loadEngagements]);
 
-  // Combine backend + training + legacy + vendor tracker rows
+  // Combine backend + legacy + vendor tracker rows
+  // Note: localStorage-based training rows (old pre-backend format) are intentionally
+  // excluded — all training data is now persisted in the backend API.
   const allRows = (() => {
     const backendRows = flattenEngagements(engagements);
-    const trainingRows = flattenTrainingRecords(getTrainingEngagements());
     const legacyRows = flattenLegacy(getLegacySessions());
     const vendorRows = flattenVendorRecords(getVendorTrainerProfiles());
-    const combined = [...trainingRows, ...backendRows, ...legacyRows, ...vendorRows];
+    const combined = [...backendRows, ...legacyRows, ...vendorRows];
 
     if (!user) return combined;
 
@@ -301,19 +302,6 @@ export default function Payments({ user }) {
       if (row.sourceType === 'backend') {
         // Backend rows are already scoped by API.
         return true;
-      }
-
-      if (row.sourceType === 'training') {
-        if (user.role === 'superadmin' || user.role === 'platform_owner') {
-          if (row.ownerSuperadminId) {
-            return String(row.ownerSuperadminId) === String(user.id);
-          }
-          return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
-        }
-        if (row.sourcedByUserId) {
-          return String(row.sourcedByUserId) === String(user.id);
-        }
-        return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;
       }
 
       if (row.sourceType === 'legacy') {
@@ -420,6 +408,16 @@ export default function Payments({ user }) {
     const paid = allRows.filter((r) => r.status === 'Paid').reduce((s, r) => s + r.amount, 0);
     const pending = total - paid;
     return { total, paid, pending, count: allRows.length };
+  }, [allRows]);
+
+  const sourceSummary = useMemo(() => {
+    const counts = { backend: 0, legacy: 0, vendor: 0 };
+    allRows.forEach((row) => {
+      if (counts[row.sourceType] !== undefined) {
+        counts[row.sourceType] += 1;
+      }
+    });
+    return counts;
   }, [allRows]);
 
   // Unique orgs and trainers for filter dropdowns
@@ -1075,7 +1073,8 @@ export default function Payments({ user }) {
       {/* ── Summary Cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         {[
-          { label: 'Total Engagements', value: summary.count, accent: false },
+          { label: 'Core Engagements', value: engagements.length, accent: false },
+          { label: 'Payment Rows (All Sources)', value: summary.count, accent: false },
           { label: 'Total Payable', value: fmt(summary.total), accent: false },
           { label: 'Paid', value: fmt(summary.paid), accent: true, color: '#22c55e' },
           { label: 'Pending / Due', value: fmt(summary.pending), accent: true, color: '#f59e0b' }
@@ -1083,6 +1082,11 @@ export default function Payments({ user }) {
           <div key={card.label} className="ops-card" style={{ padding: '1rem 1.25rem', textAlign: 'center' }}>
             <p className="muted" style={{ fontSize: '0.75rem', marginBottom: '0.3rem' }}>{card.label}</p>
             <strong style={{ fontSize: '1.35rem', color: card.color || 'inherit' }}>{card.value}</strong>
+            {card.label === 'Payment Rows (All Sources)' && (
+              <p className="muted" style={{ marginTop: '0.25rem', fontSize: '0.7rem' }}>
+                backend: {sourceSummary.backend} | legacy: {sourceSummary.legacy} | vendor: {sourceSummary.vendor}
+              </p>
+            )}
           </div>
         ))}
       </div>

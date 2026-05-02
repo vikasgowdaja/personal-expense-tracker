@@ -96,6 +96,11 @@ router.post('/import-pdf', auth, resumeUpload.single('resume'), async (req, res)
   }
 
   try {
+    const userDoc = await getUserWithConnections(req.user.id);
+    if (!userDoc) {
+      return res.status(401).json({ message: 'User not found for scope resolution' });
+    }
+
     const extracted = await extractTrainerProfileFromPdf(req.file.path);
 
     if (!extracted.fullName && !extracted.email) {
@@ -104,7 +109,9 @@ router.post('/import-pdf', auth, resumeUpload.single('resume'), async (req, res)
 
     let trainer = null;
     if (extracted.email) {
-      trainer = await Trainer.findOne({ user: req.user.id, email: extracted.email.toLowerCase() });
+      trainer = await Trainer.findOne(
+        mergeScopeAndFilters(await buildTrainerScope(userDoc), { email: extracted.email.toLowerCase() })
+      );
     }
 
     if (trainer) {

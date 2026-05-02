@@ -79,7 +79,11 @@ function RecoveryBar({ recovered, total }) {
 function isEngagementVisibleForUser(row, user) {
   if (!user) return true;
 
-  if (user.role === 'superadmin' || user.role === 'platform_owner') {
+  if (user.role === 'platform_owner') {
+    return true;
+  }
+
+  if (user.role === 'superadmin') {
     if (row.ownerSuperadminId) {
       return String(row.ownerSuperadminId) === String(user.id);
     }
@@ -112,7 +116,11 @@ function Insights({ user }) {
 
       if (!user) return true;
 
-      if (user.role === 'superadmin' || user.role === 'platform_owner') {
+      if (user.role === 'platform_owner') {
+        return true;
+      }
+
+      if (user.role === 'superadmin') {
         if (item.ownerSuperadminId) {
           return String(item.ownerSuperadminId) === String(user.id);
         }

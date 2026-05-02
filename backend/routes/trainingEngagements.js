@@ -2,6 +2,8 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const auth = require('../middleware/auth');
 const TrainingEngagement = require('../models/TrainingEngagement');
+const CycleTrackingRecord = require('../models/CycleTrackingRecord');
+const Invoice = require('../models/Invoice');
 const User = require('../models/User');
 
 const router = express.Router();
@@ -61,6 +63,39 @@ async function buildEngagementScope(userDoc) {
 function mergeScopeAndFilters(scope, filters) {
   if (!filters || Object.keys(filters).length === 0) return scope;
   return { $and: [scope, filters] };
+}
+
+async function syncOrgPaymentReceived(engagementId) {
+  await Promise.all([
+    Invoice.updateMany(
+      { trainingEngagementId: engagementId, status: { $ne: 'Paid' } },
+      { $set: { status: 'Paid' } }
+    ),
+    CycleTrackingRecord.updateMany(
+      { trainingEngagementId: engagementId },
+      { $set: { orgPaymentStatus: 'Paid', yetToRecover: 0 } }
+    )
+  ]);
+}
+
+async function syncOrgPaymentReverted(engagementId) {
+  await Promise.all([
+    Invoice.updateMany(
+      { trainingEngagementId: engagementId, status: 'Paid' },
+      { $set: { status: 'Sent' } }
+    ),
+    CycleTrackingRecord.updateMany(
+      { trainingEngagementId: engagementId, orgPaymentStatus: 'Paid' },
+      [
+        {
+          $set: {
+            orgPaymentStatus: 'Recovery Due',
+            yetToRecover: '$marginLeft'
+          }
+        }
+      ]
+    )
+  ]);
 }
 
 // ── GET all engagements ──
@@ -256,6 +291,9 @@ router.post(
         tdsPercent: Number(req.body.tdsPercent || 10),
         tdsAmount: Number(req.body.tdsAmount || 0),
         status: req.body.status || 'Planned',
+        orgPaymentReceivedAt: req.body.status === 'Paid'
+          ? (req.body.orgPaymentReceivedAt ? new Date(req.body.orgPaymentReceivedAt) : new Date())
+          : null,
         notes: req.body.notes || '',
         sourcedBy: req.body.sourcedBy || '',
         sourcedByName: req.body.sourcedByName || ''
@@ -284,12 +322,16 @@ router.put('/:id', auth, async (req, res) => {
     if (!row) {
       return res.status(404).json({ message: 'Training engagement not found' });
     }
+    const previousStatus = row.status;
+    const requestedStatus = req.body.status;
+    const isPaidRollback = previousStatus === 'Paid' && requestedStatus === 'Invoiced';
+    const canRollbackPaidStatus = userDoc.role === 'superadmin' || userDoc.role === 'platform_owner';
 
     // Enforce forward-only status lifecycle
-    if (req.body.status && row.status) {
+    if (requestedStatus && row.status) {
       const prevIndex = STATUS_FLOW.indexOf(row.status);
-      const nextIndex = STATUS_FLOW.indexOf(req.body.status);
-      if (prevIndex !== -1 && nextIndex !== -1 && nextIndex < prevIndex) {
+      const nextIndex = STATUS_FLOW.indexOf(requestedStatus);
+      if (prevIndex !== -1 && nextIndex !== -1 && nextIndex < prevIndex && !(isPaidRollback && canRollbackPaidStatus)) {
         return res.status(400).json({ message: 'Status cannot move backward in lifecycle' });
       }
     }
@@ -338,11 +380,64 @@ router.put('/:id', auth, async (req, res) => {
       }));
     }
 
+    if (req.body.orgPaymentReceivedAt !== undefined) {
+      row.orgPaymentReceivedAt = req.body.orgPaymentReceivedAt ? new Date(req.body.orgPaymentReceivedAt) : null;
+    } else if (isPaidRollback) {
+      row.orgPaymentReceivedAt = null;
+    } else if (row.status === 'Paid' && !row.orgPaymentReceivedAt) {
+      row.orgPaymentReceivedAt = new Date();
+    }
+
     const saved = await row.save();
+
+    if (previousStatus !== 'Paid' && saved.status === 'Paid') {
+      await syncOrgPaymentReceived(saved._id);
+    } else if (previousStatus === 'Paid' && saved.status !== 'Paid') {
+      await syncOrgPaymentReverted(saved._id);
+    }
+
     res.json(saved);
   } catch (err) {
     console.error(err.message);
     res.status(400).json({ message: err.message || 'Invalid update request' });
+  }
+});
+
+router.post('/:id/mark-org-paid', auth, async (req, res) => {
+  try {
+    const userDoc = await getUserWithConnections(req.user.id);
+    if (!userDoc) {
+      return res.status(401).json({ message: 'User not found for scope resolution' });
+    }
+
+    if (userDoc.role === 'employee') {
+      return res.status(403).json({ message: 'Employees cannot mark organization payments as received.' });
+    }
+
+    const filter = mergeScopeAndFilters(await buildEngagementScope(userDoc), { _id: req.params.id });
+    const row = await TrainingEngagement.findOne(filter);
+    if (!row) {
+      return res.status(404).json({ message: 'Training engagement not found' });
+    }
+
+    row.status = 'Paid';
+    row.orgPaymentReceivedAt = req.body?.paymentReceivedAt
+      ? new Date(req.body.paymentReceivedAt)
+      : new Date();
+
+    if (req.body?.note) {
+      row.notes = row.notes
+        ? `${row.notes}\n[ORG PAYMENT RECEIVED] ${req.body.note}`
+        : `[ORG PAYMENT RECEIVED] ${req.body.note}`;
+    }
+
+    const saved = await row.save();
+    await syncOrgPaymentReceived(saved._id);
+
+    res.json(saved);
+  } catch (err) {
+    console.error(err.message);
+    res.status(400).json({ message: err.message || 'Unable to mark organization payment as received' });
   }
 });
 
@@ -360,6 +455,9 @@ router.delete('/:id', auth, async (req, res) => {
     if (!row) {
       return res.status(404).json({ message: 'Training engagement not found' });
     }
+
+    await CycleTrackingRecord.deleteMany({ trainingEngagementId: row._id });
+
     res.json({ message: 'Training engagement removed' });
   } catch (err) {
     console.error(err.message);

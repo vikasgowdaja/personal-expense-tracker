@@ -13,7 +13,11 @@ const EMPTY_FORM = {
 function isEngagementVisibleForUser(row, user) {
   if (!user) return true;
 
-  if ((user.role === 'superadmin' || user.role === 'platform_owner')) {
+  if (user.role === 'platform_owner') {
+    return true;
+  }
+
+  if (user.role === 'superadmin') {
     if (row.ownerSuperadminId) {
       return String(row.ownerSuperadminId) === String(user.id);
     }
@@ -29,10 +33,14 @@ function isEngagementVisibleForUser(row, user) {
 function isTrainerVisibleForUser(trainer, user, scopedEngagements) {
   if (!user) return true;
 
+  if (user.role === 'platform_owner') {
+    return true;
+  }
+
   // API results are already server-scoped by auth and role.
   if (trainer.user) return true;
 
-  if ((user.role === 'superadmin' || user.role === 'platform_owner')) {
+  if (user.role === 'superadmin') {
     if (trainer.ownerSuperadminId) {
       return String(trainer.ownerSuperadminId) === String(user.id);
     }

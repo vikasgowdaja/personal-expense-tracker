@@ -3,8 +3,72 @@ const { body, validationResult } = require('express-validator');
 const auth = require('../middleware/auth');
 const Invoice = require('../models/Invoice');
 const TrainingEngagement = require('../models/TrainingEngagement');
+const User = require('../models/User');
 
 const router = express.Router();
+
+function isPlatformOwner(req) {
+  return req.user?.role === 'platform_owner';
+}
+
+function buildInvoiceScope(req, filters = {}) {
+  return isPlatformOwner(req) ? filters : { ...filters, user: req.user.id };
+}
+
+async function getUserWithConnections(userId) {
+  return User.findById(userId)
+    .select('role connections')
+    .lean();
+}
+
+async function buildEngagementScope(userDoc) {
+  if (!userDoc) return { _id: null };
+
+  if (userDoc.role === 'platform_owner') {
+    return {};
+  }
+
+  if (userDoc.role === 'superadmin') {
+    const managedEmployees = await User.find({
+      role: 'employee',
+      connections: {
+        $elemMatch: {
+          superadminId: userDoc._id,
+          isActive: true
+        }
+      }
+    }).select('_id').lean();
+
+    const employeeIds = managedEmployees.map((row) => row._id);
+
+    return {
+      $or: [
+        { ownerSuperadminId: userDoc._id },
+        { user: userDoc._id },
+        ...(employeeIds.length ? [{ user: { $in: employeeIds } }] : [])
+      ]
+    };
+  }
+
+  const activeConnections = (userDoc.connections || []).filter((c) => c.isActive !== false);
+  const pairClauses = activeConnections.map((c) => ({
+    ownerSuperadminId: c.superadminId,
+    connectionId: c.connectionId
+  }));
+
+  return {
+    $or: [
+      { sourcedByUserId: userDoc._id },
+      { user: userDoc._id },
+      ...pairClauses
+    ]
+  };
+}
+
+function mergeScopeAndFilters(scope, filters) {
+  if (!filters || Object.keys(filters).length === 0) return scope;
+  return { $and: [scope, filters] };
+}
 
 async function generateInvoiceNumber(userId, year) {
   const prefix = `INV-${year}-`;
@@ -25,7 +89,7 @@ async function generateInvoiceNumber(userId, year) {
 
 router.get('/', auth, async (req, res) => {
   try {
-    const invoices = await Invoice.find({ user: req.user.id })
+    const invoices = await Invoice.find(buildInvoiceScope(req))
       .populate({
         path: 'trainingEngagementId',
         populate: [
@@ -61,10 +125,16 @@ router.post(
     }
 
     try {
-      const engagement = await TrainingEngagement.findOne({
-        _id: req.body.trainingEngagementId,
-        user: req.user.id
-      });
+      const userDoc = await getUserWithConnections(req.user.id);
+      if (!userDoc) {
+        return res.status(401).json({ message: 'User not found for scope resolution' });
+      }
+
+      const engagement = await TrainingEngagement.findOne(
+        mergeScopeAndFilters(await buildEngagementScope(userDoc), {
+          _id: req.body.trainingEngagementId
+        })
+      );
 
       if (!engagement) {
         return res.status(404).json({ message: 'Training engagement not found' });
@@ -72,14 +142,15 @@ router.post(
 
       const invoiceDate = req.body.invoiceDate ? new Date(req.body.invoiceDate) : new Date();
       const year = invoiceDate.getFullYear();
-      const invoiceNumber = await generateInvoiceNumber(req.user.id, year);
+      const ownerUserId = engagement.user || req.user.id;
+      const invoiceNumber = await generateInvoiceNumber(ownerUserId, year);
 
       const subtotal = engagement.totalAmount;
       const taxAmount = Number(req.body.taxAmount || 0);
       const totalDue = subtotal + taxAmount;
 
       const invoice = new Invoice({
-        user: req.user.id,
+        user: ownerUserId,
         invoiceNumber,
         trainingEngagementId: engagement._id,
         invoiceDate,
@@ -107,7 +178,7 @@ router.post(
 
 router.put('/:id', auth, async (req, res) => {
   try {
-    const invoice = await Invoice.findOne({ _id: req.params.id, user: req.user.id });
+    const invoice = await Invoice.findOne(buildInvoiceScope(req, { _id: req.params.id }));
     if (!invoice) {
       return res.status(404).json({ message: 'Invoice not found' });
     }
@@ -123,9 +194,12 @@ router.put('/:id', auth, async (req, res) => {
     const saved = await invoice.save();
 
     if (req.body.status === 'Paid') {
-      const engagement = await TrainingEngagement.findOne({ _id: invoice.trainingEngagementId, user: req.user.id });
+      const engagement = await TrainingEngagement.findById(invoice.trainingEngagementId);
       if (engagement) {
         engagement.status = 'Paid';
+        if (!engagement.orgPaymentReceivedAt) {
+          engagement.orgPaymentReceivedAt = new Date();
+        }
         await engagement.save();
       }
     }
@@ -139,7 +213,7 @@ router.put('/:id', auth, async (req, res) => {
 
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const invoice = await Invoice.findOneAndDelete({ _id: req.params.id, user: req.user.id });
+    const invoice = await Invoice.findOneAndDelete(buildInvoiceScope(req, { _id: req.params.id }));
     if (!invoice) {
       return res.status(404).json({ message: 'Invoice not found' });
     }

@@ -150,6 +150,10 @@ const trainingEngagementSchema = new mongoose.Schema({
     enum: STATUS,
     default: 'Planned'
   },
+  orgPaymentReceivedAt: {
+    type: Date,
+    default: null
+  },
   notes: {
     type: String,
     trim: true,

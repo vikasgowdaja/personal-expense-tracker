@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { clientAPI, employeeAPI, institutionAPI, topicAPI, trainerAPI, trainingEngagementAPI } from '../../services/api';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { clientAPI, employeeAPI, institutionAPI, topicAPI, trainerAPI, trainerSettlementAPI, trainingEngagementAPI } from '../../services/api';
+import ProfitJarAnimation from '../Common/ProfitJarAnimation';
 
 const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -14,6 +15,63 @@ const ENGAGEMENT_TYPES = [
 ];
 
 const DEFAULT_TDS_PERCENT = 10;
+
+const MARK_ORG_PAID_GOLD_STYLE = {
+  padding: '4px 10px',
+  fontSize: '0.76rem',
+  marginRight: '6px',
+  border: '1px solid #b8860b',
+  borderRadius: '8px',
+  color: '#3d2c00',
+  fontWeight: 700,
+  backgroundImage: 'linear-gradient(135deg, #fff3b0 0%, #ffd95a 40%, #f4b400 72%, #d99600 100%)',
+  boxShadow: '0 2px 8px rgba(244, 180, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.75)',
+  textShadow: '0 1px 0 rgba(255, 255, 255, 0.45)',
+  letterSpacing: '0.2px'
+};
+
+const MARK_ORG_PAID_LOCKED_STYLE = {
+  padding: '4px 10px',
+  fontSize: '0.76rem',
+  marginRight: '6px',
+  border: '1px solid #6b7280',
+  borderRadius: '8px',
+  color: '#f9fafb',
+  fontWeight: 700,
+  backgroundImage: 'linear-gradient(135deg, #d1d5db 0%, #9ca3af 42%, #6b7280 75%, #4b5563 100%)',
+  boxShadow: '0 2px 8px rgba(75, 85, 99, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+  textShadow: '0 1px 0 rgba(17, 24, 39, 0.35)',
+  letterSpacing: '0.2px'
+};
+
+const SETTLE_TRAINER_RESPONSIBILITY_STYLE = {
+  padding: '4px 10px',
+  fontSize: '0.76rem',
+  marginRight: '6px',
+  border: '1px solid #b91c1c',
+  borderRadius: '8px',
+  color: '#ffffff',
+  fontWeight: 700,
+  backgroundImage: 'linear-gradient(135deg, #ef4444 0%, #dc2626 48%, #b91c1c 100%)',
+  boxShadow: '0 2px 8px rgba(220, 38, 38, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.22)',
+  textShadow: '0 1px 0 rgba(127, 29, 29, 0.45)',
+  letterSpacing: '0.2px'
+};
+
+const CONFIRM_TONE_STYLES = {
+  default: {
+    border: '1px solid #1d4ed8',
+    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)'
+  },
+  danger: {
+    border: '1px solid #b91c1c',
+    background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)'
+  },
+  success: {
+    border: '1px solid #b8860b',
+    background: 'linear-gradient(135deg, #f5cf62 0%, #d4af37 72%, #b8860b 100%)'
+  }
+};
 
 function toLocalDateKey(date = new Date()) {
   const y = date.getFullYear();
@@ -80,6 +138,7 @@ function normalizeApiEngagement(row) {
     totalAmount: Number(row.totalAmount || 0),
     notes: row.notes || '',
     paymentStatus: row.status || 'Invoiced',
+    orgPaymentReceivedAt: row.orgPaymentReceivedAt || null,
     ownerSuperadminId: row.ownerSuperadminId || '',
     connectionId: row.connectionId || '',
     sourcedByUserId: row.sourcedByUserId || '',
@@ -222,6 +281,24 @@ function getEmployeeConnectionContext(user, selectedConnectionId) {
   return activeConnections[0];
 }
 
+function normalizeSettlementRow(row) {
+  const trainingId = typeof row.trainingEngagementId === 'object'
+    ? row.trainingEngagementId?._id
+    : row.trainingEngagementId;
+
+  return {
+    id: row._id,
+    trainingRecordId: trainingId ? String(trainingId) : '',
+    status: row.status || 'Planned',
+    amount: Number(row.amount || 0),
+    perDayPayment: Number(row.perDayPayment || 0),
+    totalDays: Number(row.totalDays || 0),
+    paidDate: row.paidDate || null,
+    trainerName: row.trainerName || '',
+    notes: row.notes || ''
+  };
+}
+
 function TrainingEngagementsHub({ user }) {
   const [engagements, setEngagements] = useState([]);
   const [form, setForm] = useState(() => {
@@ -250,11 +327,49 @@ function TrainingEngagementsHub({ user }) {
   const [institutionRows, setInstitutionRows] = useState([]);
   const [clientRows, setClientRows] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [settlementRows, setSettlementRows] = useState([]);
+  const [settlementDialog, setSettlementDialog] = useState({
+    open: false,
+    mode: 'create',
+    settlementId: '',
+    engagementId: '',
+    engagementLabel: '',
+    trainerId: '',
+    trainerName: '',
+    collegeName: '',
+    organizationName: '',
+    startDate: '',
+    endDate: '',
+    totalDays: 0,
+    perDayPayment: '',
+    amount: '',
+    maxAllowedAmount: 0,
+    netPayableAmount: 0,
+    consumedAmount: 0,
+    status: 'Paid',
+    notes: ''
+  });
 
   const [filterCollege, setFilterCollege] = useState('');
   const [filterOrganization, setFilterOrganization] = useState('');
   const [filterTrainer, setFilterTrainer] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [markOrgPaidPressedRowId, setMarkOrgPaidPressedRowId] = useState('');
+  const [profitAnimationState, setProfitAnimationState] = useState({
+    active: false,
+    rowId: '',
+    amount: 0,
+    pulse: 0
+  });
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false,
+    title: '',
+    message: '',
+    confirmLabel: 'Confirm',
+    cancelLabel: 'Cancel',
+    tone: 'default'
+  });
+  const confirmResolverRef = useRef(null);
 
   // ── Bulk selection state ──
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -265,6 +380,31 @@ function TrainingEngagementsHub({ user }) {
     setEngagements(next);
   };
 
+  const requestConfirmation = ({ title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', tone = 'default' }) => {
+    return new Promise((resolve) => {
+      if (confirmResolverRef.current) {
+        confirmResolverRef.current(false);
+      }
+      confirmResolverRef.current = resolve;
+      setConfirmDialog({
+        open: true,
+        title,
+        message,
+        confirmLabel,
+        cancelLabel,
+        tone
+      });
+    });
+  };
+
+  const resolveConfirmation = (accepted) => {
+    setConfirmDialog((prev) => ({ ...prev, open: false }));
+    if (confirmResolverRef.current) {
+      confirmResolverRef.current(accepted);
+      confirmResolverRef.current = null;
+    }
+  };
+
   const loadEngagements = async () => {
     try {
       const res = await trainingEngagementAPI.getAll();
@@ -273,6 +413,16 @@ function TrainingEngagementsHub({ user }) {
       persist(normalized);
     } catch {
       setEngagements([]);
+    }
+  };
+
+  const loadSettlements = async () => {
+    try {
+      const res = await trainerSettlementAPI.getAll();
+      const rows = Array.isArray(res.data) ? res.data : [];
+      setSettlementRows(rows.map(normalizeSettlementRow));
+    } catch {
+      setSettlementRows([]);
     }
   };
 
@@ -331,6 +481,7 @@ function TrainingEngagementsHub({ user }) {
   useEffect(() => {
     const init = async () => {
       await loadEngagements();
+      await loadSettlements();
       await refreshLookups();
       try {
         const trainersRes = await trainerAPI.getAll();
@@ -445,87 +596,92 @@ function TrainingEngagementsHub({ user }) {
       return;
     }
 
-    const institution = institutionRows.find((x) => (x.name || '').trim().toLowerCase() === resolvedCollege.toLowerCase());
-    const client = clientRows.find((x) => (x.name || '').trim().toLowerCase() === resolvedOrg.toLowerCase());
+    try {
+      const institution = institutionRows.find((x) => (x.name || '').trim().toLowerCase() === resolvedCollege.toLowerCase());
+      const client = clientRows.find((x) => (x.name || '').trim().toLowerCase() === resolvedOrg.toLowerCase());
 
-    let institutionId = institution?._id;
-    let clientId = client?._id;
+      let institutionId = institution?._id;
+      let clientId = client?._id;
 
-    if (!institutionId) {
-      const createdInstitution = await institutionAPI.create({ name: resolvedCollege });
-      institutionId = createdInstitution?.data?._id;
+      if (!institutionId) {
+        const createdInstitution = await institutionAPI.create({ name: resolvedCollege });
+        institutionId = createdInstitution?.data?._id;
+      }
+
+      if (!clientId) {
+        const createdClient = await clientAPI.create({ name: resolvedOrg });
+        clientId = createdClient?.data?._id;
+      }
+
+      const effectiveDates = getEffectiveDates(form);
+      const totalDays = effectiveDates.length;
+      const rate = Number(form.ratePerDay || 0);
+      const grossAmount = totalDays * rate;
+      const tdsApplicable = form.tdsApplicable !== false;
+      const tdsAmount = tdsApplicable ? (grossAmount * DEFAULT_TDS_PERCENT) / 100 : 0;
+      const netAmount = grossAmount - tdsAmount;
+      const effectiveRange = getDateRangeFromDates(effectiveDates);
+
+      const payload = {
+        institutionId,
+        clientId,
+        engagementTitle: form.engagementType,
+        startDate: effectiveRange.startDate,
+        endDate: effectiveRange.endDate,
+        selectedDates: effectiveDates,
+        dailyHours: Number(form.dailyHours || 0),
+        learners: Number(form.learners || 0),
+        trainers: [
+          {
+            trainerId: form.trainerId,
+            trainingTopic: resolvedTopic,
+            subjectArea: resolvedTopic,
+            dailyRate: rate
+          }
+        ],
+        tdsApplicable,
+        tdsPercent: DEFAULT_TDS_PERCENT,
+        tdsAmount,
+        status: form.paymentStatus,
+        notes: form.notes,
+        connectionId: form.connectionId || getUserDefaultConnection(user),
+        sourcedBy: form.sourcedBy || '',
+        sourcedByName: form.sourcedByName || ''
+      };
+
+      if (editId) {
+        await trainingEngagementAPI.update(editId, payload);
+      } else {
+        await trainingEngagementAPI.create(payload);
+      }
+
+      await loadEngagements();
+      await loadSettlements();
+      await refreshLookups();
+      if (resolvedTopic && !topicOptions.includes(resolvedTopic)) {
+        setTopicOptions((prev) => [resolvedTopic, ...prev]);
+      }
+      if (resolvedCollege && !collegeOptions.includes(resolvedCollege)) {
+        setCollegeOptions((prev) => [resolvedCollege, ...prev]);
+      }
+      if (resolvedOrg && !organizationOptions.includes(resolvedOrg)) {
+        setOrganizationOptions((prev) => [resolvedOrg, ...prev]);
+      }
+
+      const base = { ...EMPTY_FORM };
+      if (user?.employeeId) {
+        base.sourcedBy = user.employeeId;
+        base.sourcedByName = user.name || '';
+      } else if (user?.name) {
+        base.sourcedBy = user.name;
+        base.sourcedByName = user.name;
+      }
+      base.connectionId = getUserDefaultConnection(user);
+      setForm(base);
+      setEditId('');
+    } catch (err) {
+      window.alert(err?.response?.data?.message || 'Unable to save training engagement.');
     }
-
-    if (!clientId) {
-      const createdClient = await clientAPI.create({ name: resolvedOrg });
-      clientId = createdClient?.data?._id;
-    }
-
-    const effectiveDates = getEffectiveDates(form);
-    const totalDays = effectiveDates.length;
-    const rate = Number(form.ratePerDay || 0);
-    const grossAmount = totalDays * rate;
-    const tdsApplicable = form.tdsApplicable !== false;
-    const tdsAmount = tdsApplicable ? (grossAmount * DEFAULT_TDS_PERCENT) / 100 : 0;
-    const netAmount = grossAmount - tdsAmount;
-    const effectiveRange = getDateRangeFromDates(effectiveDates);
-
-    const payload = {
-      institutionId,
-      clientId,
-      engagementTitle: form.engagementType,
-      startDate: effectiveRange.startDate,
-      endDate: effectiveRange.endDate,
-      selectedDates: effectiveDates,
-      dailyHours: Number(form.dailyHours || 0),
-      learners: Number(form.learners || 0),
-      trainers: [
-        {
-          trainerId: form.trainerId,
-          trainingTopic: resolvedTopic,
-          subjectArea: resolvedTopic,
-          dailyRate: rate
-        }
-      ],
-      tdsApplicable,
-      tdsPercent: DEFAULT_TDS_PERCENT,
-      tdsAmount,
-      status: form.paymentStatus,
-      notes: form.notes,
-      connectionId: form.connectionId || getUserDefaultConnection(user),
-      sourcedBy: form.sourcedBy || '',
-      sourcedByName: form.sourcedByName || ''
-    };
-
-    if (editId) {
-      await trainingEngagementAPI.update(editId, payload);
-    } else {
-      await trainingEngagementAPI.create(payload);
-    }
-
-    await loadEngagements();
-    await refreshLookups();
-    if (resolvedTopic && !topicOptions.includes(resolvedTopic)) {
-      setTopicOptions((prev) => [resolvedTopic, ...prev]);
-    }
-    if (resolvedCollege && !collegeOptions.includes(resolvedCollege)) {
-      setCollegeOptions((prev) => [resolvedCollege, ...prev]);
-    }
-    if (resolvedOrg && !organizationOptions.includes(resolvedOrg)) {
-      setOrganizationOptions((prev) => [resolvedOrg, ...prev]);
-    }
-
-    const base = { ...EMPTY_FORM };
-    if (user?.employeeId) {
-      base.sourcedBy = user.employeeId;
-      base.sourcedByName = user.name || '';
-    } else if (user?.name) {
-      base.sourcedBy = user.name;
-      base.sourcedByName = user.name;
-    }
-    base.connectionId = getUserDefaultConnection(user);
-    setForm(base);
-    setEditId('');
   };
 
   const handleEdit = (row) => {
@@ -568,13 +724,218 @@ function TrainingEngagementsHub({ user }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDelete = (id) => {
-    if (!window.confirm('Delete this training engagement?')) return;
+  const handleDelete = async (id) => {
+    const confirmed = await requestConfirmation({
+      title: 'Delete Training Engagement',
+      message: 'This action will permanently remove this engagement and linked cycle tracking records. Continue?',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      tone: 'danger'
+    });
+    if (!confirmed) return;
+
     trainingEngagementAPI.delete(id)
       .then(() => loadEngagements())
       .catch((err) => {
         window.alert(err?.response?.data?.message || 'Unable to delete training engagement');
       });
+  };
+
+  const handleMarkOrgPaid = async (row) => {
+    setMarkOrgPaidPressedRowId(row.id);
+    setTimeout(() => {
+      setMarkOrgPaidPressedRowId((prev) => (prev === row.id ? '' : prev));
+    }, 170);
+
+    if ((row.paymentStatus || '').toLowerCase() === 'paid') {
+      return;
+    }
+    const confirmed = await requestConfirmation({
+      title: 'Confirm Organization Payment',
+      message: `Mark this engagement as PAID by organization/payer?\n\n${row.organization} - ${row.college}`,
+      confirmLabel: 'Mark Paid',
+      cancelLabel: 'Not Now',
+      tone: 'success'
+    });
+    if (!confirmed) return;
+
+    try {
+      await trainingEngagementAPI.markOrgPaid(row.id, {
+        paymentReceivedAt: new Date().toISOString(),
+        note: `Marked as paid from Training Engagements records by ${user?.name || 'user'}`
+      });
+
+      setProfitAnimationState({
+        active: true,
+        rowId: row.id,
+        amount: Number(getNetAmount(row) || 0),
+        pulse: Date.now()
+      });
+
+      await loadEngagements();
+    } catch (err) {
+      window.alert(err?.response?.data?.message || 'Unable to mark payer-side payment as received.');
+    }
+  };
+
+  const handleProfitAnimationDone = (rowId) => {
+    setProfitAnimationState((prev) => {
+      if (!prev.active || prev.rowId !== rowId) return prev;
+      return {
+        ...prev,
+        active: false,
+        rowId: '',
+        amount: 0
+      };
+    });
+  };
+
+  const settlementSummaryMap = useMemo(() => {
+    const map = new Map();
+
+    settlementRows.forEach((item) => {
+      const key = item.trainingRecordId;
+      if (!key) return;
+      if (!map.has(key)) {
+        map.set(key, {
+          rows: [],
+          totalCount: 0,
+          paidCount: 0
+        });
+      }
+      const bucket = map.get(key);
+      bucket.rows.push(item);
+      bucket.totalCount += 1;
+      if (String(item.status || '').toLowerCase() === 'paid') {
+        bucket.paidCount += 1;
+      }
+    });
+
+    return map;
+  }, [settlementRows]);
+
+  const getSettlementStatusMeta = (engagementId) => {
+    const summary = settlementSummaryMap.get(String(engagementId));
+    if (!summary || summary.totalCount === 0) {
+      return { label: 'Not Started', className: 'pill-neutral', settled: false };
+    }
+    if (summary.paidCount === summary.totalCount) {
+      return { label: 'Settled', className: 'pill-green', settled: true };
+    }
+    if (summary.paidCount > 0) {
+      return { label: 'Partially Settled', className: 'pill-blue', settled: false };
+    }
+    return { label: 'Pending', className: 'pill-neutral', settled: false };
+  };
+
+  const openSettlementDialog = (row) => {
+    const summary = settlementSummaryMap.get(String(row.id));
+    const allRows = summary?.rows || [];
+    const pendingRow = (summary?.rows || []).find((x) => String(x.status || '').toLowerCase() !== 'paid');
+    const perDay = Number(pendingRow?.perDayPayment || row.ratePerDay || 0);
+    const totalDays = Number(pendingRow?.totalDays || row.totalDays || 0);
+    const netPayableAmount = Number(getNetAmount(row) || 0);
+    const consumedAmount = allRows
+      .filter((x) => String(x.id) !== String(pendingRow?.id || ''))
+      .reduce((sum, x) => sum + Number(x.amount || 0), 0);
+    const maxAllowedAmount = Math.max(netPayableAmount - consumedAmount, 0);
+    const suggestedAmount = Number(pendingRow?.amount || (perDay * totalDays) || 0);
+    const amount = Math.min(maxAllowedAmount, suggestedAmount > 0 ? suggestedAmount : maxAllowedAmount);
+
+    if (maxAllowedAmount <= 0) {
+      window.alert('This engagement is already fully allocated against Net Payable. No more trainer settlement can be added.');
+      return;
+    }
+
+    setSettlementDialog({
+      open: true,
+      mode: pendingRow ? 'update' : 'create',
+      settlementId: pendingRow?.id || '',
+      engagementId: row.id,
+      engagementLabel: `${row.college || 'Unknown College'} - ${row.topic || 'Training Engagement'}`,
+      trainerId: row.trainerId || '',
+      trainerName: row.trainerName || '',
+      collegeName: row.college || '',
+      organizationName: row.organization || '',
+      startDate: row.startDate || '',
+      endDate: row.endDate || '',
+      totalDays,
+      perDayPayment: String(perDay),
+      amount: String(amount),
+      maxAllowedAmount,
+      netPayableAmount,
+      consumedAmount,
+      status: 'Paid',
+      notes: pendingRow?.notes || ''
+    });
+  };
+
+  const closeSettlementDialog = () => {
+    setSettlementDialog((prev) => ({ ...prev, open: false }));
+  };
+
+  const handleSettlementField = (key, value) => {
+    setSettlementDialog((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === 'perDayPayment' || key === 'totalDays') {
+        const computed = Number(next.perDayPayment || 0) * Number(next.totalDays || 0);
+        const clamped = Math.min(Number(next.maxAllowedAmount || 0), computed);
+        next.amount = String(clamped);
+      }
+      if (key === 'amount') {
+        const numeric = Number(value || 0);
+        const clamped = Math.min(Number(prev.maxAllowedAmount || 0), Number.isFinite(numeric) ? numeric : 0);
+        next.amount = String(clamped);
+      }
+      return next;
+    });
+  };
+
+  const handleSettlementSave = async () => {
+    const amount = Number(settlementDialog.amount || 0);
+    if (!settlementDialog.engagementId) {
+      window.alert('Engagement not selected for settlement.');
+      return;
+    }
+    if (Number.isNaN(amount) || amount <= 0) {
+      window.alert('Settlement amount must be greater than 0.');
+      return;
+    }
+    if (amount > Number(settlementDialog.maxAllowedAmount || 0)) {
+      window.alert(`Settlement amount cannot exceed ${toInr(settlementDialog.maxAllowedAmount)} for this engagement.`);
+      return;
+    }
+
+    const payload = {
+      trainingEngagementId: settlementDialog.engagementId,
+      engagementLabel: settlementDialog.engagementLabel,
+      trainerId: settlementDialog.trainerId || null,
+      trainerName: settlementDialog.trainerName,
+      collegeName: settlementDialog.collegeName,
+      organizationName: settlementDialog.organizationName,
+      startDate: settlementDialog.startDate || null,
+      endDate: settlementDialog.endDate || null,
+      totalDays: Number(settlementDialog.totalDays || 0),
+      perDayPayment: Number(settlementDialog.perDayPayment || 0),
+      amount,
+      paidDate: new Date().toISOString(),
+      status: settlementDialog.status || 'Paid',
+      notes: settlementDialog.notes || '',
+      sourcedBy: user?.employeeId || user?.name || '',
+      sourcedByName: user?.name || ''
+    };
+
+    try {
+      if (settlementDialog.mode === 'update' && settlementDialog.settlementId) {
+        await trainerSettlementAPI.update(settlementDialog.settlementId, payload);
+      } else {
+        await trainerSettlementAPI.create(payload);
+      }
+      await loadSettlements();
+      closeSettlementDialog();
+    } catch (err) {
+      window.alert(err?.response?.data?.message || 'Unable to save trainer settlement.');
+    }
   };
 
   const toggleSelectId = (id) => {
@@ -634,7 +995,11 @@ function TrainingEngagementsHub({ user }) {
 
   // ── Ownership filter: employees only see their own records ──
   const visibleEngagements = useMemo(() => {
-    if ((user?.role === 'superadmin' || user?.role === 'platform_owner')) {
+    if (user?.role === 'platform_owner') {
+      return engagements;
+    }
+
+    if (user?.role === 'superadmin') {
       const myEmployeeIds = new Set(
         (employeeOptions || [])
           .filter((x) => x.role === 'employee')
@@ -1117,6 +1482,7 @@ function TrainingEngagementsHub({ user }) {
                     {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>TDS</th>}
                     {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>Net Payable</th>}
                     <th>Status</th>
+                    <th>Trainer Settlement</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -1150,10 +1516,69 @@ function TrainingEngagementsHub({ user }) {
                       {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td>{toInr(getGrossAmount(x))}</td>}
                       {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td>{toInr(getTdsAmount(x))}</td>}
                       {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td><strong>{toInr(getNetAmount(x))}</strong></td>}
-                      <td><span className="status-pill pill-neutral">{x.paymentStatus || 'Invoiced'}</span></td>
-                      <td style={{ whiteSpace: 'nowrap' }}>
+                      <td>
+                        <span className="status-pill pill-neutral">{x.paymentStatus || 'Invoiced'}</span>
+                        {String(x.paymentStatus || '').toLowerCase() === 'paid' && x.orgPaymentReceivedAt && (
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                            Org paid on {formatDate(x.orgPaymentReceivedAt)}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        {(() => {
+                          const settlementMeta = getSettlementStatusMeta(x.id);
+                          return (
+                            <span className={`status-pill ${settlementMeta.className}`}>{settlementMeta.label}</span>
+                          );
+                        })()}
+                      </td>
+                      <td style={{ whiteSpace: 'nowrap', position: 'relative', overflow: 'visible' }}>
+                        {(() => {
+                          const settlementMeta = getSettlementStatusMeta(x.id);
+                          const markOrgPaidStyle = settlementMeta.settled
+                            ? MARK_ORG_PAID_GOLD_STYLE
+                            : MARK_ORG_PAID_LOCKED_STYLE;
+
+                          return (
+                            <>
+                              {!settlementMeta.settled && (
+                                <button
+                                  className="btn btn-primary"
+                                  style={SETTLE_TRAINER_RESPONSIBILITY_STYLE}
+                                  onClick={() => openSettlementDialog(x)}
+                                  title="Trainer settlement responsibility is pending"
+                                >
+                                  Settle Trainer
+                                </button>
+                              )}
+                              {(user?.role === 'superadmin' || user?.role === 'platform_owner') && String(x.paymentStatus || '').toLowerCase() === 'invoiced' && (
+                                <button
+                                  className="btn btn-primary"
+                                  style={{
+                                    ...markOrgPaidStyle,
+                                    transform: markOrgPaidPressedRowId === x.id ? 'scale(0.95)' : 'scale(1)',
+                                    transition: 'transform 180ms cubic-bezier(0.4, 0, 0.2, 1)'
+                                  }}
+                                  onClick={() => handleMarkOrgPaid(x)}
+                                  title={settlementMeta.settled
+                                    ? 'Use when organization/payer has completed payment'
+                                    : 'Trainer settlement is pending/partial. Complete settlement responsibility first.'}
+                                >
+                                  Mark Org Paid
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
                         <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.76rem', marginRight: '6px' }} onClick={() => handleEdit(x)}>Edit</button>
                         <button className="btn btn-danger" style={{ padding: '4px 10px', fontSize: '0.76rem' }} onClick={() => handleDelete(x.id)}>Delete</button>
+                        {profitAnimationState.active && profitAnimationState.rowId === x.id && (
+                          <ProfitJarAnimation
+                            key={`${profitAnimationState.rowId}-${profitAnimationState.pulse}`}
+                            amount={profitAnimationState.amount}
+                            onDone={() => handleProfitAnimationDone(x.id)}
+                          />
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -1213,6 +1638,124 @@ function TrainingEngagementsHub({ user }) {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {settlementDialog.open && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(2, 6, 23, 0.45)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem'
+        }}>
+          <div className="ops-card" style={{ width: '100%', maxWidth: '760px', maxHeight: '90vh', overflow: 'auto' }}>
+            <h3 style={{ marginTop: 0 }}>{settlementDialog.mode === 'update' ? 'Complete Trainer Settlement' : 'Create Trainer Settlement'}</h3>
+            <p className="muted" style={{ marginTop: 0 }}>{settlementDialog.engagementLabel}</p>
+
+            <div className="ops-grid-two">
+              <div className="form-group">
+                <label>Trainer</label>
+                <input className="form-control" value={settlementDialog.trainerName} readOnly />
+              </div>
+              <div className="form-group">
+                <label>Organization</label>
+                <input className="form-control" value={settlementDialog.organizationName} readOnly />
+              </div>
+              <div className="form-group">
+                <label>Total Days</label>
+                <input className="form-control" type="number" value={settlementDialog.totalDays} onChange={(e) => handleSettlementField('totalDays', e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Per Day Payment</label>
+                <input className="form-control" type="number" min="0" step="0.01" value={settlementDialog.perDayPayment} onChange={(e) => handleSettlementField('perDayPayment', e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Total Amount</label>
+                <input className="form-control" type="number" min="0" max={settlementDialog.maxAllowedAmount} step="0.01" value={settlementDialog.amount} onChange={(e) => handleSettlementField('amount', e.target.value)} />
+                <span style={{ fontSize: '0.78rem', color: 'var(--ops-text-secondary)', marginTop: '4px', display: 'block' }}>
+                  Max allowed: {toInr(settlementDialog.maxAllowedAmount)} (Net Payable {toInr(settlementDialog.netPayableAmount)} - Already Logged {toInr(settlementDialog.consumedAmount)})
+                </span>
+              </div>
+              <div className="form-group">
+                <label>Status</label>
+                <select className="form-control" value={settlementDialog.status} onChange={(e) => handleSettlementField('status', e.target.value)}>
+                  <option value="Planned">Planned</option>
+                  <option value="Partially Paid">Partially Paid</option>
+                  <option value="Paid">Paid</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>Notes</label>
+                <textarea className="form-control" rows={3} value={settlementDialog.notes} onChange={(e) => handleSettlementField('notes', e.target.value)} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+              <button className="btn btn-primary" onClick={handleSettlementSave}>Save Settlement</button>
+              <button className="btn btn-secondary" onClick={closeSettlementDialog}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmDialog.open && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(2, 6, 23, 0.5)',
+          zIndex: 10020,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem'
+        }}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={confirmDialog.title || 'Confirmation Dialog'}
+            style={{
+              width: '100%',
+              maxWidth: '520px',
+              background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+              border: '1px solid #dbe3f0',
+              borderRadius: '18px',
+              boxShadow: '0 22px 50px rgba(15, 23, 42, 0.28)',
+              padding: '1.2rem 1.2rem 1rem'
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: '0.55rem', color: '#0f172a' }}>{confirmDialog.title || 'Please confirm'}</h3>
+            <div style={{ color: '#334155', fontSize: '0.95rem', lineHeight: 1.5, whiteSpace: 'pre-line' }}>
+              {confirmDialog.message}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.65rem', marginTop: '1.1rem' }}>
+              <button
+                className="btn btn-secondary"
+                style={{ minWidth: '90px' }}
+                onClick={() => resolveConfirmation(false)}
+              >
+                {confirmDialog.cancelLabel || 'Cancel'}
+              </button>
+              <button
+                className="btn"
+                style={{
+                  minWidth: '120px',
+                  color: confirmDialog.tone === 'success' ? '#3d2c00' : '#ffffff',
+                  fontWeight: 700,
+                  borderRadius: '10px',
+                  boxShadow: '0 4px 12px rgba(15, 23, 42, 0.18)',
+                  ...(CONFIRM_TONE_STYLES[confirmDialog.tone] || CONFIRM_TONE_STYLES.default)
+                }}
+                onClick={() => resolveConfirmation(true)}
+              >
+                {confirmDialog.confirmLabel || 'Confirm'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

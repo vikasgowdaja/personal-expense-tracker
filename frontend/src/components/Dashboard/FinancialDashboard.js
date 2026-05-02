@@ -44,7 +44,10 @@ function FinancialDashboard({ user }) {
     try {
       const all = JSON.parse(localStorage.getItem('training_engagements') || '[]');
       if (!user) return all;
-      if (user.role === 'superadmin' || user.role === 'platform_owner') {
+      if (user.role === 'platform_owner') {
+        return all;
+      }
+      if (user.role === 'superadmin') {
         return all.filter((row) => {
           if (row.ownerSuperadminId) return String(row.ownerSuperadminId) === String(user.id);
           return row.sourcedBy === user.employeeId || row.sourcedByName === user.name;

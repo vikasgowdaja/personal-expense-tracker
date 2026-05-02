@@ -62,6 +62,47 @@ function mergeScopeAndFilters(scope, filters) {
   return { $and: [scope, filters] };
 }
 
+function toMoney(value) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+async function getConsumedSettlementAmount(trainingEngagementId, excludeId = null) {
+  const query = { trainingEngagementId };
+  if (excludeId) {
+    query._id = { $ne: excludeId };
+  }
+
+  const rows = await TrainerSettlement.find(query).select('amount').lean();
+  return rows.reduce((sum, item) => sum + toMoney(item.amount), 0);
+}
+
+async function validateSettlementCap({ trainingEngagementId, amount, excludeSettlementId = null, engagement }) {
+  const netPayable = toMoney(engagement?.totalAmount);
+  const consumed = await getConsumedSettlementAmount(trainingEngagementId, excludeSettlementId);
+  const requested = toMoney(amount);
+  const nextTotal = consumed + requested;
+
+  // Small epsilon protects against floating-point precision noise.
+  if (nextTotal > netPayable + 0.0001) {
+    return {
+      ok: false,
+      netPayable,
+      consumed,
+      requested,
+      remaining: Math.max(netPayable - consumed, 0)
+    };
+  }
+
+  return {
+    ok: true,
+    netPayable,
+    consumed,
+    requested,
+    remaining: Math.max(netPayable - consumed, 0)
+  };
+}
+
 router.get('/', auth, async (req, res) => {
   try {
     const userDoc = await getUserWithConnections(req.user.id);
@@ -122,6 +163,24 @@ router.post(
         return res.status(404).json({ message: 'Training engagement not found in your scope' });
       }
 
+      const capResult = await validateSettlementCap({
+        trainingEngagementId: req.body.trainingEngagementId,
+        amount: req.body.amount,
+        engagement
+      });
+
+      if (!capResult.ok) {
+        return res.status(400).json({
+          message: 'Settlement amount exceeds engagement net payable limit',
+          details: {
+            netPayableAmount: capResult.netPayable,
+            alreadyAllocatedAmount: capResult.consumed,
+            requestedAmount: capResult.requested,
+            remainingAllowedAmount: capResult.remaining
+          }
+        });
+      }
+
       const row = new TrainerSettlement({
         user: req.user.id,
         ownerSuperadminId: engagement.ownerSuperadminId || req.user.id,
@@ -165,6 +224,34 @@ router.put('/:id', auth, async (req, res) => {
     const row = await TrainerSettlement.findOne(filter);
     if (!row) {
       return res.status(404).json({ message: 'Trainer settlement not found' });
+    }
+
+    const engagement = await TrainingEngagement.findOne(
+      mergeScopeAndFilters(await buildSettlementScope(userDoc), { _id: row.trainingEngagementId })
+    ).lean();
+
+    if (!engagement) {
+      return res.status(404).json({ message: 'Training engagement not found in your scope' });
+    }
+
+    const nextAmount = req.body.amount !== undefined ? req.body.amount : row.amount;
+    const capResult = await validateSettlementCap({
+      trainingEngagementId: row.trainingEngagementId,
+      amount: nextAmount,
+      excludeSettlementId: row._id,
+      engagement
+    });
+
+    if (!capResult.ok) {
+      return res.status(400).json({
+        message: 'Settlement amount exceeds engagement net payable limit',
+        details: {
+          netPayableAmount: capResult.netPayable,
+          alreadyAllocatedAmount: capResult.consumed,
+          requestedAmount: capResult.requested,
+          remainingAllowedAmount: capResult.remaining
+        }
+      });
     }
 
     const scalarFields = [

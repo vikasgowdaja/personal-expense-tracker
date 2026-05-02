@@ -6,6 +6,11 @@ const User = require('../models/User');
 
 const router = express.Router();
 
+function mergeScopeAndFilters(scope, filters) {
+  if (!filters || Object.keys(filters).length === 0) return scope;
+  return { $and: [scope, filters] };
+}
+
 async function getUserWithConnections(userId) {
   return User.findById(userId)
     .select('role connections')
@@ -96,8 +101,14 @@ router.post(
 
 router.put('/:id', auth, async (req, res) => {
   try {
+    const userDoc = await getUserWithConnections(req.user.id);
+    if (!userDoc) {
+      return res.status(401).json({ message: 'User not found for scope resolution' });
+    }
+
+    const scope = await buildInstitutionScope(userDoc);
     const institution = await Institution.findOneAndUpdate(
-      { _id: req.params.id, user: req.user.id },
+      mergeScopeAndFilters(scope, { _id: req.params.id }),
       { $set: req.body },
       { new: true }
     );
@@ -115,7 +126,13 @@ router.put('/:id', auth, async (req, res) => {
 
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const institution = await Institution.findOneAndDelete({ _id: req.params.id, user: req.user.id });
+    const userDoc = await getUserWithConnections(req.user.id);
+    if (!userDoc) {
+      return res.status(401).json({ message: 'User not found for scope resolution' });
+    }
+
+    const scope = await buildInstitutionScope(userDoc);
+    const institution = await Institution.findOneAndDelete(mergeScopeAndFilters(scope, { _id: req.params.id }));
     if (!institution) {
       return res.status(404).json({ message: 'Institution not found' });
     }

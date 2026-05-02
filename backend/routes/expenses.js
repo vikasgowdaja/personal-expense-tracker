@@ -4,12 +4,20 @@ const { body, validationResult } = require('express-validator');
 const auth = require('../middleware/auth');
 const Expense = require('../models/Expense');
 
+function isPlatformOwner(req) {
+  return req.user?.role === 'platform_owner';
+}
+
+function buildExpenseQuery(req, filters = {}) {
+  return isPlatformOwner(req) ? filters : { ...filters, user: req.user.id };
+}
+
 // @route   GET /api/expenses
 // @desc    Get all expenses for logged in user
 // @access  Private
 router.get('/', auth, async (req, res) => {
   try {
-    const expenses = await Expense.find({ user: req.user.id }).sort({ date: -1 });
+    const expenses = await Expense.find(buildExpenseQuery(req)).sort({ date: -1 });
     res.json(expenses);
   } catch (err) {
     console.error(err.message);
@@ -29,7 +37,7 @@ router.get('/:id', auth, async (req, res) => {
     }
 
     // Make sure user owns expense
-    if (expense.user.toString() !== req.user.id) {
+    if (!isPlatformOwner(req) && expense.user.toString() !== req.user.id) {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
@@ -98,7 +106,7 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     // Make sure user owns expense
-    if (expense.user.toString() !== req.user.id) {
+    if (!isPlatformOwner(req) && expense.user.toString() !== req.user.id) {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
@@ -130,7 +138,7 @@ router.delete('/:id', auth, async (req, res) => {
     }
 
     // Make sure user owns expense
-    if (expense.user.toString() !== req.user.id) {
+    if (!isPlatformOwner(req) && expense.user.toString() !== req.user.id) {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
@@ -151,7 +159,7 @@ router.delete('/:id', auth, async (req, res) => {
 // @access  Private
 router.get('/stats/summary', auth, async (req, res) => {
   try {
-    const expenses = await Expense.find({ user: req.user.id });
+    const expenses = await Expense.find(buildExpenseQuery(req));
     
     const total = expenses.reduce((sum, expense) => sum + expense.amount, 0);
     

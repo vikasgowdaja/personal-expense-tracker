@@ -182,6 +182,7 @@ export const trainingEngagementAPI = {
   getTrainerDefaults: (trainerId) => api.get(`/training-engagements/defaults/trainer/${trainerId}`),
   create: (data) => api.post('/training-engagements', data),
   update: (id, data) => api.put(`/training-engagements/${id}`, data),
+  markOrgPaid: (id, data = {}) => api.post(`/training-engagements/${id}/mark-org-paid`, data),
   delete: (id) => api.delete(`/training-engagements/${id}`)
 };
 
@@ -190,6 +191,13 @@ export const trainerSettlementAPI = {
   create: (data) => api.post('/trainer-settlements', data),
   update: (id, data) => api.put(`/trainer-settlements/${id}`, data),
   delete: (id) => api.delete(`/trainer-settlements/${id}`)
+};
+
+export const cycleTrackingAPI = {
+  getAll: (params = {}) => api.get('/cycle-tracking', { params }),
+  create: (data) => api.post('/cycle-tracking', data),
+  update: (id, data) => api.put(`/cycle-tracking/${id}`, data),
+  delete: (id) => api.delete(`/cycle-tracking/${id}`)
 };
 
 export const invoiceAPI = {

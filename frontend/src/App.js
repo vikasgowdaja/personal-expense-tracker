@@ -11,6 +11,7 @@ import AppShell from './components/Layout/AppShell';
 import Payments from './components/Payments/Payments';
 import Insights from './components/Insights/Insights';
 import PlaceholderModule from './components/Common/PlaceholderModule';
+import ProfitAnimationLab from './components/Common/ProfitAnimationLab';
 import CalendarHub from './components/Calendar/CalendarHub';
 import Profile from './components/Profile/Profile';
 import TrainingEngagementsHub from './components/TrainingEngagements/TrainingEngagementsHub';
@@ -244,6 +245,10 @@ function App() {
             <Route
               path="settings"
               element={<PlaceholderModule title="Settings" description="Prepare role-based configuration and automation defaults." />}
+            />
+            <Route
+              path="animation-lab"
+              element={<ProfitAnimationLab />}
             />
           </Route>
         </Routes>

@@ -16,6 +16,18 @@ function normalizeKey(key) {
   return String(key || '').trim();
 }
 
+function isPlatformOwner(req) {
+  return req.user?.role === 'platform_owner';
+}
+
+function resolveTargetUserId(req, fallbackToCurrent = true) {
+  const requestedUserId = req.query.userId || req.body?.userId;
+  if (isPlatformOwner(req) && requestedUserId) {
+    return String(requestedUserId).trim();
+  }
+  return fallbackToCurrent ? req.user.id : null;
+}
+
 router.get('/', requireAuth, async (req, res) => {
   try {
     const keys = String(req.query.keys || '')
@@ -23,17 +35,19 @@ router.get('/', requireAuth, async (req, res) => {
       .map((k) => normalizeKey(k))
       .filter((k) => ALLOWED_KEYS.has(k));
 
-    const query = { userId: req.user.id };
+    const targetUserId = resolveTargetUserId(req, false);
+    const query = targetUserId ? { userId: targetUserId } : {};
     if (keys.length > 0) {
       query.key = { $in: keys };
     }
 
     const rows = await UserDataStore.find(query)
-      .select('key payload updatedAt')
+      .select('userId key payload updatedAt')
       .lean();
 
     res.json({
       items: rows.map((row) => ({
+        userId: row.userId,
         key: row.key,
         payload: row.payload,
         updatedAt: row.updatedAt
@@ -48,6 +62,7 @@ router.get('/', requireAuth, async (req, res) => {
 router.put('/:key', requireAuth, async (req, res) => {
   try {
     const key = normalizeKey(req.params.key);
+    const targetUserId = resolveTargetUserId(req, true);
     if (!ALLOWED_KEYS.has(key)) {
       return res.status(400).json({ message: 'Unsupported key' });
     }
@@ -57,12 +72,13 @@ router.put('/:key', requireAuth, async (req, res) => {
     }
 
     const updated = await UserDataStore.findOneAndUpdate(
-      { userId: req.user.id, key },
+      { userId: targetUserId, key },
       { $set: { payload: req.body.payload } },
       { new: true, upsert: true, setDefaultsOnInsert: true }
-    ).select('key payload updatedAt');
+    ).select('userId key payload updatedAt');
 
     res.json({
+      userId: updated.userId,
       key: updated.key,
       payload: updated.payload,
       updatedAt: updated.updatedAt
@@ -76,16 +92,18 @@ router.put('/:key', requireAuth, async (req, res) => {
 router.post('/bulk-upsert', requireAuth, async (req, res) => {
   try {
     const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    const defaultUserId = resolveTargetUserId(req, true);
     if (items.length === 0) {
       return res.status(400).json({ message: 'items is required' });
     }
 
     const operations = items
       .map((item) => ({
+        userId: isPlatformOwner(req) && item?.userId ? String(item.userId).trim() : defaultUserId,
         key: normalizeKey(item?.key),
         payload: item?.payload
       }))
-      .filter((item) => ALLOWED_KEYS.has(item.key));
+      .filter((item) => item.userId && ALLOWED_KEYS.has(item.key));
 
     if (operations.length === 0) {
       return res.status(400).json({ message: 'No valid keys supplied' });
@@ -94,7 +112,7 @@ router.post('/bulk-upsert', requireAuth, async (req, res) => {
     await UserDataStore.bulkWrite(
       operations.map((item) => ({
         updateOne: {
-          filter: { userId: req.user.id, key: item.key },
+          filter: { userId: item.userId, key: item.key },
           update: { $set: { payload: item.payload } },
           upsert: true
         }
@@ -102,14 +120,14 @@ router.post('/bulk-upsert', requireAuth, async (req, res) => {
     );
 
     const updatedRows = await UserDataStore.find({
-      userId: req.user.id,
-      key: { $in: operations.map((item) => item.key) }
+      $or: operations.map((item) => ({ userId: item.userId, key: item.key }))
     })
-      .select('key payload updatedAt')
+      .select('userId key payload updatedAt')
       .lean();
 
     res.json({
       items: updatedRows.map((row) => ({
+        userId: row.userId,
         key: row.key,
         payload: row.payload,
         updatedAt: row.updatedAt
@@ -124,11 +142,12 @@ router.post('/bulk-upsert', requireAuth, async (req, res) => {
 router.delete('/:key', requireAuth, async (req, res) => {
   try {
     const key = normalizeKey(req.params.key);
+    const targetUserId = resolveTargetUserId(req, true);
     if (!ALLOWED_KEYS.has(key)) {
       return res.status(400).json({ message: 'Unsupported key' });
     }
 
-    await UserDataStore.deleteOne({ userId: req.user.id, key });
+    await UserDataStore.deleteOne({ userId: targetUserId, key });
     res.json({ success: true });
   } catch (error) {
     console.error('User data delete error:', error);

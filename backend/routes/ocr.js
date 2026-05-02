@@ -19,6 +19,18 @@ const {
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 fs.mkdir(uploadsDir, { recursive: true }).catch(console.error);
 
+function isPlatformOwner(req) {
+  return req.user?.role === 'platform_owner';
+}
+
+function buildExpenseHistoryQuery(req) {
+  return isPlatformOwner(req) ? {} : { user: req.user.id };
+}
+
+function buildProcessedDataQuery(req) {
+  return isPlatformOwner(req) ? {} : { user: req.user.id };
+}
+
 // Check for duplicate expenses
 async function checkDuplicate(userId, expenseData) {
   const { date, amount, title } = expenseData;
@@ -79,7 +91,7 @@ router.post('/upload', auth, upload.array('receipts', 10), async (req, res) => {
     // Get user transaction history for ML context
     let userHistory = [];
     try {
-      const expenses = await Expense.find({ user: req.user.id }).limit(100);
+      const expenses = await Expense.find(buildExpenseHistoryQuery(req)).limit(100);
       userHistory = expenses.map(e => ({
         amount: e.amount,
         category: e.category,
@@ -363,7 +375,7 @@ router.delete('/cleanup/:filename', auth, async (req, res) => {
 // GET /api/ocr/processed - retrieve recent OpenAI processed results for the user
 router.get('/processed', auth, async (req, res) => {
   try {
-    const items = await ProcessedData.find({ user: req.user.id }).sort({ createdAt: -1 }).limit(50);
+    const items = await ProcessedData.find(buildProcessedDataQuery(req)).sort({ createdAt: -1 }).limit(50);
     res.json({ success: true, items });
   } catch (err) {
     console.error('Error fetching processed data', err);
