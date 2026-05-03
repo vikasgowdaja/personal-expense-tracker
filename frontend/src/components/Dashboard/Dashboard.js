@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { trainerSettlementAPI, trainingEngagementAPI } from '../../services/api';
+import FinancialDashboard from './FinancialDashboard';
+import Insights from '../Insights/Insights';
 import './Dashboard.css';
 
 const DEFAULT_TDS_PERCENT = 10;
@@ -133,7 +136,33 @@ function normalizeSettlement(row) {
   };
 }
 
+const DASHBOARD_TABS = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'insights', label: 'Insights', adminOnly: true },
+  { key: 'financial', label: 'Financial Reports', adminOnly: true }
+];
+
 function Dashboard({ user }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isAdmin = user?.role === 'superadmin' || user?.role === 'platform_owner';
+
+  const activeTab = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    if (tab === 'insights' && isAdmin) return 'insights';
+    if (tab === 'financial' && isAdmin) return 'financial';
+    return 'overview';
+  }, [location.search, isAdmin]);
+
+  function setTab(key) {
+    if (key === 'overview') {
+      navigate('/dashboard');
+    } else {
+      navigate(`/dashboard?tab=${key}`);
+    }
+  }
+
   const [engagementRows, setEngagementRows] = useState([]);
   const [settlementRows, setSettlementRows] = useState([]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -500,33 +529,29 @@ function Dashboard({ user }) {
   return (
     <section className="ops-page">
       <div className="ops-page-header">
-        <h1>TEMS Revenue Dashboard</h1>
-        <p>Overall TDS, overall revenue, in-hand revenue, counts, and month/year analysis.</p>
+        <h1>Dashboard</h1>
+        <p>Revenue overview, insights, and financial reports in one place.</p>
       </div>
 
-      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
-        <div style={{
-          background: 'linear-gradient(90deg, #7c3aed 0%, #6366f1 100%)',
-          color: '#fff',
-          borderRadius: '10px',
-          padding: '14px 20px',
-          marginBottom: '20px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          flexWrap: 'wrap'
-        }}>
-          <span style={{ fontWeight: 700, fontSize: '14px' }}>SuperAdmin Access</span>
-          <a href="/financial" style={{ color: '#e0d9ff', fontSize: '13px', textDecoration: 'underline' }}>
-            Financial Reports
-          </a>
-          <a href="/employees" style={{ color: '#e0d9ff', fontSize: '13px', textDecoration: 'underline' }}>
-            Manage Employees
-          </a>
+      {isAdmin && (
+        <div className="dashboard-tabs">
+          {DASHBOARD_TABS.filter((t) => !t.adminOnly || isAdmin).map((t) => (
+            <button
+              key={t.key}
+              className={`dashboard-tab-btn${activeTab === t.key ? ' active' : ''}`}
+              onClick={() => setTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
       )}
 
-      <div className="summary-cards dashboard-summary-grid">
+      {activeTab === 'insights' && isAdmin && <Insights user={user} />}
+      {activeTab === 'financial' && isAdmin && <FinancialDashboard user={user} />}
+      {activeTab === 'overview' && (
+        <>
+        <div className="summary-cards dashboard-summary-grid">
         <div className="ops-card summary-card teaching-stat-card accent-green">
           <div className="stat-value">{inr(analytics.totals.gross)}</div>
           <div className="stat-label">Overall Revenue (Gross)</div>
@@ -805,6 +830,8 @@ function Dashboard({ user }) {
           </div>
         )}
       </article>
+      )}
+        </>
       )}
     </section>
   );

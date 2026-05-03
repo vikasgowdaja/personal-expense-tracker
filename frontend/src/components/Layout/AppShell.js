@@ -6,17 +6,11 @@ const SIDEBAR_COLLAPSED_KEY = 'ops_sidebar_collapsed';
 const BASE_NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: 'home' },
   { to: '/calendar', label: 'Calendar', icon: 'calendar' },
-  { to: '/training-engagements', label: 'Training Engagements', icon: 'teaching' },
-  { to: '/trainers', label: 'Trainers', icon: 'trainer' },
-  { to: '/topics', label: 'Topics', icon: 'topic' },
-  { to: '/colleges', label: 'Colleges', icon: 'college' },
-  { to: '/organizations', label: 'Organizations', icon: 'organization' }
+  { to: '/training-engagements', label: 'Training Engagements', icon: 'teaching' }
 ];
 
 const SUPERADMIN_NAV_ITEMS = [
-  { to: '/insights', label: 'Insights', icon: 'insights' },
-  { to: '/financial', label: 'Financial Reports', icon: 'financial' },
-  { to: '/finance', label: 'Payments', icon: 'payments' },
+  { to: '/master-data?tab=trainers', label: 'Master Data', icon: 'topic' },
   { to: '/expenses', label: 'Expenses & Debts', icon: 'log' },
   { to: '/trainer-settlements', label: 'Trainer Settlement', icon: 'payments' },
   { to: '/employees', label: 'Employees', icon: 'employees' }

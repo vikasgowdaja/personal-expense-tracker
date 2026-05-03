@@ -8,19 +8,13 @@ import EmployeeDashboard from './components/Dashboard/EmployeeDashboard';
 import ExpenseList from './components/Expenses/ExpenseList';
 import UploadReceipt from './components/Expenses/UploadReceipt';
 import AppShell from './components/Layout/AppShell';
-import Payments from './components/Payments/Payments';
-import Insights from './components/Insights/Insights';
 import PlaceholderModule from './components/Common/PlaceholderModule';
 import ProfitAnimationLab from './components/Common/ProfitAnimationLab';
+import MasterDataHub from './components/Common/MasterDataHub';
 import CalendarHub from './components/Calendar/CalendarHub';
 import Profile from './components/Profile/Profile';
 import TrainingEngagementsHub from './components/TrainingEngagements/TrainingEngagementsHub';
-import Colleges from './components/Colleges/Colleges';
-import Organizations from './components/Organizations/Organizations';
-import Trainers from './components/Trainers/Trainers';
-import Topics from './components/Topics/Topics';
 import TrainersSettlement from './components/TrainersSettlement/TrainersSettlement';
-import FinancialDashboard from './components/Dashboard/FinancialDashboard';
 import EmployeeManager from './components/Admin/EmployeeManager';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import { authAPI } from './services/api';
@@ -167,14 +161,6 @@ function App() {
             />
             <Route path="calendar" element={<CalendarHub />} />
             <Route
-              path="finance"
-              element={
-                <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
-                  <Payments user={user} />
-                </ProtectedRoute>
-              }
-            />
-            <Route
               path="trainer-settlements"
               element={
                 <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
@@ -198,14 +184,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="insights"
-              element={
-                <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
-                  <Insights user={user} />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="insights" element={<Navigate to="/dashboard?tab=insights" replace />} />
             <Route path="profile" element={<Profile />} />
             <Route
               path="teaching"
@@ -219,20 +198,20 @@ function App() {
               path="vendor"
               element={<Navigate to="/training-engagements" replace />}
             />
-            <Route path="trainers" element={<Trainers user={user} />} />
-            <Route path="colleges" element={<Colleges />} />
-            <Route path="topics" element={<Topics />} />
-            <Route path="organizations" element={<Organizations />} />
-
-            {/* Privileged routes (SuperAdmin + Platform Owner) */}
             <Route
-              path="financial"
+              path="master-data"
               element={
                 <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
-                  <FinancialDashboard user={user} />
+                  <MasterDataHub user={user} />
                 </ProtectedRoute>
               }
             />
+            <Route path="trainers" element={<Navigate to="/master-data?tab=trainers" replace />} />
+            <Route path="topics" element={<Navigate to="/master-data?tab=topics" replace />} />
+            <Route path="colleges" element={<Navigate to="/master-data?tab=colleges" replace />} />
+            <Route path="organizations" element={<Navigate to="/master-data?tab=organizations" replace />} />
+
+            <Route path="financial" element={<Navigate to="/dashboard?tab=financial" replace />} />
             <Route
               path="employees"
               element={
