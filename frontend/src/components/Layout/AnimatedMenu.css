@@ -1,0 +1,142 @@
+.am-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 30;
+}
+
+.am-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 320px;
+  z-index: 40;
+  background-color: #ffffff;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+}
+
+.am-close-btn {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  padding: 8px;
+  border-radius: 9999px;
+  background-color: #f3f4f6;
+  color: #111827;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.am-close-btn:hover {
+  background-color: #e5e7eb;
+}
+
+.am-drag-indicator {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.am-nav-content {
+  padding: 80px 32px 32px 32px;
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.am-nav-header {
+  margin-bottom: 48px;
+}
+
+.am-nav-header h2 {
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.am-nav-underline {
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 4px;
+  background-color: #2563eb;
+}
+
+.am-nav-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.am-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: #1f2937;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.am-nav-item:hover, .am-active {
+  background-color: #f3f4f6;
+}
+
+.am-icon-box {
+  padding: 8px;
+  border-radius: 8px;
+  background-color: #e5e7eb;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4b5563;
+}
+
+.am-nav-item:hover .am-icon-box, .am-active .am-icon-box {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+
+.am-nav-label {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 500;
+}
+
+.am-drag-hint {
+  position: absolute;
+  bottom: 32px;
+  left: 32px;
+  right: 32px;
+  padding: 16px;
+  border-radius: 8px;
+  background-color: #f3f4f6;
+  text-align: left;
+}
+
+.am-drag-hint p {
+  font-size: 0.875rem;
+  color: #4b5563;
+  margin: 0;
+}

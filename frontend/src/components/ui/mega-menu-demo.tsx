@@ -1,5 +1,5 @@
 // mega-menu-demo.tsx
-import * as React from "react";
+import React from "react";
 import MegaMenu from "./mega-menu";
 import type { MegaMenuItem } from "./mega-menu";
 import {
