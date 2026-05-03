@@ -5,7 +5,11 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      # Match the Azure target platform to avoid native addon mismatches
+      platforms:
+        - linux/amd64
     image: personal-ops-backend:local
+    restart: unless-stopped
     ports:
       - "5000:8080"
     environment:
@@ -15,15 +19,31 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - CORS_ORIGINS=${CORS_ORIGINS}
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/api/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
       args:
         REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL:-https://backend-personal-ops-feg6cagkdjf0hmcz.canadacentral-01.azurewebsites.net/api}
     image: personal-ops-frontend:local
+    restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "3000:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3

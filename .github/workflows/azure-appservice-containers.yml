@@ -1,17 +1,37 @@
-name: Azure App Service Container Deploy
+name: Deploy to Azure – Personal Ops Intelligence
 
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 'Deploy target'
+        required: false
+        default: 'both'
+        type: choice
+        options: [both, backend, frontend]
+
+env:
+  # Docker build platform – matches Azure Linux App Service
+  BUILD_PLATFORM: linux/amd64
 
 jobs:
+  # ─────────────────────────────────────────────────────────
+  # 1. BACKEND
+  # ─────────────────────────────────────────────────────────
   backend:
+    name: Build & Deploy Backend
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.deploy_target != 'frontend' }}
+
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Azure Login
         uses: azure/login@v2
@@ -30,32 +50,31 @@ jobs:
         with:
           context: ./backend
           file: ./backend/Dockerfile
+          platforms: ${{ env.BUILD_PLATFORM }}
           push: true
+          # Layer caching via ACR (speeds up native addon compilation)
+          cache-from: type=registry,ref=${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-backend:buildcache
+          cache-to:   type=registry,ref=${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-backend:buildcache,mode=max
           tags: |
             ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-backend:${{ github.sha }}
             ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-backend:latest
 
-      - name: Validate Backend Web App Target
+      - name: Validate Backend Web App exists
         shell: bash
         env:
           WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_BACKEND_NAME }}
         run: |
           if [ -z "$WEBAPP_NAME" ]; then
-            echo "::error::Missing secret AZURE_WEBAPP_BACKEND_NAME."
+            echo "::error::Secret AZURE_WEBAPP_BACKEND_NAME is not set."
             exit 1
           fi
-
-          SUB_NAME=$(az account show --query name -o tsv)
-          SUB_ID=$(az account show --query id -o tsv)
-          echo "Using subscription: $SUB_NAME ($SUB_ID)"
-          echo "Backend target app-name: $WEBAPP_NAME"
-
-          MATCH_COUNT=$(az webapp list --query "[?name=='$WEBAPP_NAME'] | length(@)" -o tsv)
-          if [ "$MATCH_COUNT" = "0" ]; then
-            echo "::error::Azure Web App '$WEBAPP_NAME' was not found in the current subscription."
-            echo "::error::Fix AZURE_WEBAPP_BACKEND_NAME or update AZURE_CREDENTIALS to the correct subscription."
+          echo "Subscription: $(az account show --query name -o tsv)"
+          FOUND=$(az webapp list --query "[?name=='$WEBAPP_NAME'] | length(@)" -o tsv)
+          if [ "$FOUND" = "0" ]; then
+            echo "::error::Azure Web App '$WEBAPP_NAME' not found in current subscription."
             exit 1
           fi
+          echo "✅ Backend app '$WEBAPP_NAME' confirmed."
 
       - name: Deploy Backend to Azure Web App
         uses: azure/webapps-deploy@v3
@@ -63,12 +82,34 @@ jobs:
           app-name: ${{ secrets.AZURE_WEBAPP_BACKEND_NAME }}
           images: ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-backend:${{ github.sha }}
 
+      - name: Verify Backend Health
+        shell: bash
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_API_URL }}
+        run: |
+          echo "Waiting 30s for backend to boot…"
+          sleep 30
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BACKEND_URL/health" || echo "000")
+          echo "Health check status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "::warning::Health check returned $STATUS – container may still be starting."
+          fi
+
+  # ─────────────────────────────────────────────────────────
+  # 2. FRONTEND
+  # ─────────────────────────────────────────────────────────
   frontend:
+    name: Build & Deploy Frontend
     runs-on: ubuntu-latest
     needs: backend
+    if: ${{ always() && github.event.inputs.deploy_target != 'backend' && (needs.backend.result == 'success' || needs.backend.result == 'skipped') }}
+
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Azure Login
         uses: azure/login@v2
@@ -87,37 +128,48 @@ jobs:
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
+          platforms: ${{ env.BUILD_PLATFORM }}
           push: true
+          cache-from: type=registry,ref=${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-frontend:buildcache
+          cache-to:   type=registry,ref=${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-frontend:buildcache,mode=max
           build-args: |
             REACT_APP_API_BASE_URL=${{ secrets.BACKEND_API_URL }}
           tags: |
             ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-frontend:${{ github.sha }}
             ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-frontend:latest
 
-      - name: Validate Frontend Web App Target
+      - name: Validate Frontend Web App exists
         shell: bash
         env:
           WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_FRONTEND_NAME }}
         run: |
           if [ -z "$WEBAPP_NAME" ]; then
-            echo "::error::Missing secret AZURE_WEBAPP_FRONTEND_NAME."
+            echo "::error::Secret AZURE_WEBAPP_FRONTEND_NAME is not set."
             exit 1
           fi
-
-          SUB_NAME=$(az account show --query name -o tsv)
-          SUB_ID=$(az account show --query id -o tsv)
-          echo "Using subscription: $SUB_NAME ($SUB_ID)"
-          echo "Frontend target app-name: $WEBAPP_NAME"
-
-          MATCH_COUNT=$(az webapp list --query "[?name=='$WEBAPP_NAME'] | length(@)" -o tsv)
-          if [ "$MATCH_COUNT" = "0" ]; then
-            echo "::error::Azure Web App '$WEBAPP_NAME' was not found in the current subscription."
-            echo "::error::Fix AZURE_WEBAPP_FRONTEND_NAME or update AZURE_CREDENTIALS to the correct subscription."
+          echo "Subscription: $(az account show --query name -o tsv)"
+          FOUND=$(az webapp list --query "[?name=='$WEBAPP_NAME'] | length(@)" -o tsv)
+          if [ "$FOUND" = "0" ]; then
+            echo "::error::Azure Web App '$WEBAPP_NAME' not found in current subscription."
             exit 1
           fi
+          echo "✅ Frontend app '$WEBAPP_NAME' confirmed."
 
       - name: Deploy Frontend to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ secrets.AZURE_WEBAPP_FRONTEND_NAME }}
           images: ${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-frontend:${{ github.sha }}
+
+      - name: Verify Frontend Health
+        shell: bash
+        env:
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+        run: |
+          echo "Waiting 20s for frontend to boot…"
+          sleep 20
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${FRONTEND_URL:-https://example.azurewebsites.net}/" || echo "000")
+          echo "Frontend health check: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "::warning::Frontend returned $STATUS – may still be starting."
+          fi
