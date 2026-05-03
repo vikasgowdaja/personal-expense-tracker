@@ -87,3 +87,93 @@ select.form-control {
   appearance: auto;
   cursor: pointer;
 }
+
+/* Enhancement layer */
+.auth-container {
+  padding: 24px;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(56, 189, 248, 0.22), transparent 34%),
+    radial-gradient(circle at 84% 80%, rgba(30, 64, 175, 0.2), transparent 30%),
+    linear-gradient(135deg, #0f172a 0%, #1e293b 52%, #0f766e 100%);
+}
+
+.auth-card {
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.35);
+  backdrop-filter: blur(3px);
+}
+
+.auth-card h2 {
+  font-size: 1.55rem;
+  letter-spacing: 0.01em;
+  margin-bottom: 20px;
+}
+
+.auth-mode-tabs {
+  border-radius: 12px;
+  background: #f8fafc;
+  margin-bottom: 20px;
+}
+
+.auth-tab {
+  padding: 10px 0;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.auth-tab.active {
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  box-shadow: inset 0 -2px 0 rgba(255, 255, 255, 0.25);
+}
+
+.btn-block {
+  margin-top: 16px;
+}
+
+.auth-link {
+  margin-top: 24px;
+  font-size: 0.92rem;
+}
+
+@media (max-width: 480px) {
+  .auth-container {
+    padding: 16px;
+  }
+
+  .auth-card {
+    padding: 24px 18px;
+    border-radius: 16px;
+  }
+}
+
+/* iBank reference style pass */
+.auth-container {
+  background:
+    radial-gradient(circle at 84% 15%, rgba(66, 63, 219, 0.2), transparent 28%),
+    radial-gradient(circle at 12% 76%, rgba(56, 189, 248, 0.18), transparent 30%),
+    linear-gradient(180deg, #f6f8fd 0%, #eef2f9 100%);
+}
+
+.auth-card {
+  max-width: 430px;
+  border-radius: 22px;
+  border: 1px solid #e6ebf4;
+  box-shadow: 0 24px 45px rgba(31, 41, 55, 0.14);
+}
+
+.auth-card h2 {
+  color: #1f2a44;
+}
+
+.auth-mode-tabs {
+  border: 1px solid #dbe3f0;
+  background: #f8faff;
+}
+
+.auth-tab.active {
+  background: linear-gradient(135deg, #423fdb, #5d5bf3);
+}
+
+.auth-link a {
+  color: #423fdb;
+}

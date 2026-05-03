@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 
 const SIDEBAR_COLLAPSED_KEY = 'ops_sidebar_collapsed';
 
@@ -188,7 +189,7 @@ function AppShell({ user, onLogout }) {
   }, [location.pathname]);
 
   return (
-    <div className={`ops-shell${sidebarCollapsed ? ' ops-shell-collapsed' : ''}`}>
+    <div className={`ops-shell${sidebarCollapsed ? ' ops-shell-collapsed' : ''} bg-body-tertiary`}>
       {/* ── Drawer backdrop (mobile only) ── */}
       {drawerOpen && (
         <div
@@ -199,7 +200,7 @@ function AppShell({ user, onLogout }) {
       )}
 
       {/* ── Sidebar / Drawer ── */}
-      <aside className={`ops-sidebar${drawerOpen ? ' ops-sidebar-open' : ''}${sidebarCollapsed ? ' ops-sidebar-collapsed' : ''}`}>
+      <aside className={`ops-sidebar${drawerOpen ? ' ops-sidebar-open' : ''}${sidebarCollapsed ? ' ops-sidebar-collapsed' : ''} shadow-sm`}>
 
         {/* ── Desktop collapse/expand toggle is at sidebar footer – see below ── */}
 
@@ -226,7 +227,7 @@ function AppShell({ user, onLogout }) {
           </div>
         )}
 
-        <nav className="ops-nav" aria-label="Primary">
+        <nav className="ops-nav nav flex-column" aria-label="Primary">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -243,7 +244,7 @@ function AppShell({ user, onLogout }) {
           ))}
         </nav>
 
-        <div className="ops-sidebar-footer">
+        <div className="ops-sidebar-footer pt-3">
           <div className="ops-sidebar-footer-text">
             {user?.name} &bull; {user?.role}
           </div>
@@ -268,9 +269,14 @@ function AppShell({ user, onLogout }) {
         </div>
       </aside>
 
-      <div className="ops-main">
-        <header className="ops-header">
-          <div className="ops-header-content">
+      <div className="ops-main d-flex flex-column">
+        <motion.header
+          className="ops-header"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24, ease: 'easeOut' }}
+        >
+          <div className="ops-header-content d-flex align-items-center justify-content-between gap-3 flex-wrap">
             {/* Hamburger – visible on mobile only */}
             <button
               className="ops-hamburger"
@@ -282,12 +288,14 @@ function AppShell({ user, onLogout }) {
               </svg>
             </button>
             <div className="ops-header-title">Dashboard</div>
-            <div className="ops-header-actions" ref={profileMenuRef}>
-              <button
+            <div className="ops-header-actions ms-auto" ref={profileMenuRef}>
+              <motion.button
                 className="ops-profile-chip"
                 onClick={() => setIsProfileMenuOpen((open) => !open)}
                 aria-haspopup="menu"
                 aria-expanded={isProfileMenuOpen}
+                whileHover={{ y: -1, scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
               >
                 {profilePhoto ? (
                   <img className="ops-profile-chip-avatar" src={profilePhoto} alt={user?.name || 'Profile'} />
@@ -299,9 +307,15 @@ function AppShell({ user, onLogout }) {
                   <small>{roleLabel}</small>
                 </span>
                 <span className="ops-profile-chip-caret">▾</span>
-              </button>
+              </motion.button>
               {isProfileMenuOpen && (
-                <div className="ops-profile-menu" role="menu">
+                <motion.div
+                  className="ops-profile-menu"
+                  role="menu"
+                  initial={{ opacity: 0, y: 4, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                >
                   <button
                     className="ops-profile-menu-item"
                     onClick={() => {
@@ -329,15 +343,20 @@ function AppShell({ user, onLogout }) {
                   >
                     Logout
                   </button>
-                </div>
+                </motion.div>
               )}
             </div>
           </div>
-        </header>
+        </motion.header>
 
-        <main className="ops-content">
+        <motion.main
+          className="ops-content container-fluid"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.26, ease: 'easeOut', delay: 0.03 }}
+        >
           <Outlet />
-        </main>
+        </motion.main>
       </div>
     </div>
   );

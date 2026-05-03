@@ -17,3 +17,88 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+:root {
+  --ui-bg: #eef3f8;
+  --ui-bg-soft: #f7fafc;
+  --ui-text: #0f172a;
+  --ui-muted: #5b6474;
+  --ui-border: #d9e2ec;
+  --ui-shadow-sm: 0 6px 16px rgba(15, 23, 42, 0.06);
+  --ui-shadow-md: 0 12px 28px rgba(15, 23, 42, 0.12);
+  --ui-radius-sm: 10px;
+  --ui-radius-md: 14px;
+  --ui-radius-lg: 18px;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  font-family: 'Manrope', 'Segoe UI Variable Text', 'Segoe UI', 'Noto Sans', sans-serif;
+  color: var(--ui-text);
+  line-height: 1.5;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(18, 96, 175, 0.08), transparent 34%),
+    radial-gradient(circle at 90% 100%, rgba(14, 116, 144, 0.08), transparent 36%),
+    var(--ui-bg);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #b8c5d6 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #b8c5d6;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::selection {
+  background: rgba(30, 64, 175, 0.18);
+}
+
+/* Font Awesome integration: auto-size with text, no global overrides */
+.svg-inline--fa {
+  vertical-align: -0.125em;
+}
+
+/* Utility size helpers that compose with Bootstrap spacing */
+.fa-xs  { font-size: 0.75em; }
+.fa-sm  { font-size: 0.875em; }
+.fa-lg  { font-size: 1.25em; }
+.fa-xl  { font-size: 1.5em; }
+.fa-2x  { font-size: 2em; }
+.fa-3x  { font-size: 3em; }
+
+/* Spin utility for loading states */
+@keyframes fa-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.fa-spin { animation: fa-spin 1s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

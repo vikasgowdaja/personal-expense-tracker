@@ -1286,3 +1286,305 @@
     width: 100%;
   }
 }
+
+/* Enhancement layer: visual refinement without changing functionality */
+.ops-content {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ops-content > * {
+  animation: ops-enter-up 260ms ease;
+}
+
+@keyframes ops-enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ops-header {
+  box-shadow: 0 1px 0 rgba(148, 163, 184, 0.3);
+}
+
+.ops-header-title {
+  letter-spacing: 0.01em;
+}
+
+.ops-card,
+.card {
+  border-radius: 16px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.07);
+  transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
+}
+
+.ops-card:hover,
+.card:hover {
+  border-color: #d3dce8;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.1);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  line-height: 1;
+  min-height: 40px;
+}
+
+.btn:focus-visible,
+.ops-nav-item:focus-visible,
+.ops-profile-chip:focus-visible,
+.form-control:focus-visible {
+  outline: 2px solid var(--ops-ring);
+  outline-offset: 1px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #1e40af, #1d4ed8);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #1e3a8a, #1e40af);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #0369a1, #0284c7);
+}
+
+.btn-secondary:hover {
+  background: linear-gradient(135deg, #0c4a6e, #0369a1);
+  transform: translateY(-1px);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+}
+
+.btn-danger:hover {
+  background: linear-gradient(135deg, #b91c1c, #dc2626);
+  transform: translateY(-1px);
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.form-control {
+  border-radius: 10px;
+  border-color: #d6deea;
+  background: #ffffff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-control:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+.loading {
+  color: #334155;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 1024px) {
+  .ops-content {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .ops-content {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .btn {
+    width: 100%;
+  }
+}
+
+/* iBank reference style pass */
+:root {
+  --ops-bg: #eef1f6;
+  --ops-surface: #ffffff;
+  --ops-text: #0f172a;
+  --ops-muted: #6b7280;
+  --ops-border: #e7ebf3;
+  --ops-ring: rgba(66, 63, 219, 0.35);
+  --ops-primary: #423fdb;
+  --ops-primary-soft: #eeedff;
+}
+
+.App {
+  background:
+    radial-gradient(circle at 84% -8%, rgba(66, 63, 219, 0.12), transparent 34%),
+    radial-gradient(circle at 8% 0%, rgba(22, 163, 208, 0.09), transparent 28%),
+    #eef1f6;
+}
+
+.ops-sidebar {
+  border-right: 1px solid #e5e9f2;
+  box-shadow: 0 12px 28px rgba(12, 23, 52, 0.08);
+}
+
+.ops-nav-item {
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.ops-nav-item-active {
+  background: linear-gradient(135deg, #423fdb, #5d5bf3);
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(66, 63, 219, 0.3);
+}
+
+.ops-header {
+  border-bottom-color: #e8edf5;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.ops-profile-chip {
+  border-radius: 18px;
+  padding: 6px 12px 6px 6px;
+}
+
+.ops-card,
+.card {
+  border: 1px solid #e6ebf4;
+  border-radius: 18px;
+  box-shadow: 0 18px 32px rgba(15, 23, 42, 0.08);
+}
+
+.btn {
+  border-radius: 12px;
+}
+
+.btn-primary,
+.btn-secondary {
+  background: linear-gradient(135deg, #423fdb, #5d5bf3);
+}
+
+.btn-primary:hover,
+.btn-secondary:hover {
+  background: linear-gradient(135deg, #3633c8, #4f4de4);
+}
+
+.status-pill {
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.status-pill.pending {
+  background: #fff1f3;
+  color: #be123c;
+}
+
+.status-pill.received {
+  background: #ecfdf3;
+  color: #15803d;
+}
+
+.ops-table th,
+.ops-table td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.ops-table tbody tr:hover {
+  background: #f8f9ff;
+}
+
+/* iBank deep refinement: finance-card language */
+.ops-page-header h1 {
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #1f2a44;
+}
+
+.ops-page-header p {
+  color: #7b8798;
+}
+
+.summary-cards {
+  gap: 16px;
+}
+
+.stat-card {
+  border: 1px solid #e5eaf4;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+  box-shadow: 0 14px 24px rgba(16, 24, 40, 0.06);
+}
+
+.stat-card h3 {
+  font-size: 1.95rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.stat-card p {
+  color: #79869b;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.status-pill {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.ops-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.ops-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f7f9ff;
+}
+
+.ops-table th:first-child,
+.ops-table td:first-child {
+  padding-left: 14px;
+}
+
+.ops-table th:last-child,
+.ops-table td:last-child {
+  padding-right: 14px;
+}
+
+.ops-table tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.timeline-item {
+  border-bottom: 1px dashed #e4e9f4;
+}
+
+.daily-feed-item {
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  border-color: #e4e9f4;
+  border-radius: 12px;
+}

@@ -523,3 +523,113 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Enhancement layer */
+.upload-section,
+.review-section {
+  border-radius: 18px;
+}
+
+.info-text {
+  color: #64748b;
+  margin-bottom: 24px;
+}
+
+.file-input-label {
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.3);
+}
+
+.file-input-label:hover {
+  background: linear-gradient(135deg, #1e40af, #1d4ed8);
+}
+
+.file-list,
+.expenses-details-container,
+.expenses-table-container {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.expense-review-card {
+  border-radius: 14px;
+  border-color: #dbe3ef;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+.expense-review-card:hover {
+  border-color: #c7d5ea;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1);
+}
+
+.compact-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.compact-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.09);
+}
+
+.expenses-table thead {
+  background: linear-gradient(135deg, #1e40af, #1d4ed8);
+}
+
+.expenses-table th {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.expenses-table tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+.inline-input,
+.inline-select {
+  border-radius: 8px;
+  border-color: #d6deea;
+}
+
+.inline-input:focus,
+.inline-select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+.action-buttons {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.13);
+  background-color: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+}
+
+@media (max-width: 768px) {
+  .action-buttons {
+    bottom: 10px;
+    padding: 14px;
+  }
+}
+
+/* iBank reference style pass */
+.expenses-table thead {
+  background: linear-gradient(135deg, #423fdb, #5d5bf3);
+}
+
+.expense-review-card,
+.detail-card,
+.expenses-details-container,
+.expenses-table-container,
+.file-list {
+  border-color: #e6ebf4;
+  border-radius: 16px;
+}
+
+.action-buttons {
+  border-color: #e2e8f3;
+  border-radius: 16px;
+}

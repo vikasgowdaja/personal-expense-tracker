@@ -59,3 +59,62 @@
     align-items: flex-start;
   }
 }
+
+/* Enhancement layer */
+.dashboard-summary-grid {
+  gap: 16px;
+}
+
+.dashboard-tabs {
+  margin-bottom: 24px;
+  padding-bottom: 2px;
+  gap: 8px;
+}
+
+.dashboard-tab-btn {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #475569;
+  padding: 10px 14px;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.dashboard-tab-btn:hover {
+  border-color: #dbe3ef;
+  background: #f8fafc;
+}
+
+.dashboard-tab-btn.active {
+  color: #1d4ed8;
+  border-bottom-color: #1d4ed8;
+  background: linear-gradient(180deg, rgba(219, 234, 254, 0.6), rgba(255, 255, 255, 0));
+}
+
+.dashboard-card-header {
+  margin-bottom: 12px;
+}
+
+.chart-card {
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.8), #ffffff 26%);
+}
+
+/* iBank reference style pass */
+.dashboard-tab-btn {
+  border-radius: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.dashboard-tab-btn.active {
+  color: #423fdb;
+  border-bottom-color: #423fdb;
+  background: linear-gradient(180deg, rgba(238, 237, 255, 0.8), rgba(255, 255, 255, 0));
+}
+
+.chart-card {
+  border: 1px solid #e5eaf4;
+  border-radius: 18px;
+  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.08);
+}

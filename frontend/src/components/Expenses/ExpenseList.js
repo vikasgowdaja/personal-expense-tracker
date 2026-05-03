@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { expenseAPI } from '../../services/api';
 import './Expenses.css';
 
@@ -173,17 +174,29 @@ function ExpenseList() {
   }, { total: 0, outstanding: 0, creditCard: 0, debt: 0 });
 
   if (loading) {
-    return <div className="loading">Loading expenses...</div>;
+    return (
+      <div className="loading d-flex align-items-center gap-2">
+        <FontAwesomeIcon icon="fa-solid fa-spinner" className="fa-spin" />
+        Loading expenses...
+      </div>
+    );
   }
 
   return (
     <div className="container">
       <div className="expenses-header">
-        <h1>Expenses</h1>
+        <h1><FontAwesomeIcon icon="fa-solid fa-receipt" className="me-2" style={{ color: '#423fdb' }} />Expenses</h1>
         <div className="filter-group" style={{ flexWrap: 'wrap' }}>
-          <button className="btn btn-primary" onClick={startCreate}>+ Add Expense / Debt</button>
-          <button className="btn btn-secondary" onClick={() => navigate('/upload-receipt')}>Upload Receipts</button>
-          <label htmlFor="filter">Filter by category:</label>
+          <button className="btn btn-primary" onClick={startCreate}>
+            <FontAwesomeIcon icon="fa-solid fa-plus" className="me-2" />Add Expense / Debt
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate('/upload-receipt')}>
+            <FontAwesomeIcon icon="fa-solid fa-upload" className="me-2" />Upload Receipts
+          </button>
+          <span className="d-inline-flex align-items-center gap-1 text-secondary">
+            <FontAwesomeIcon icon="fa-solid fa-filter" />
+            <label htmlFor="filter" className="mb-0">Category:</label>
+          </span>
           <select 
             id="filter"
             className="form-control filter-select" 
@@ -199,7 +212,7 @@ function ExpenseList() {
             <option value="Healthcare">Healthcare</option>
             <option value="Other">Other</option>
           </select>
-          <label htmlFor="typeFilter">Type:</label>
+          <label htmlFor="typeFilter" className="mb-0">Type:</label>
           <select
             id="typeFilter"
             className="form-control filter-select"
@@ -211,7 +224,7 @@ function ExpenseList() {
             <option value="debt">Debt</option>
             <option value="credit_card_bill">Credit Card Bill</option>
           </select>
-          <label htmlFor="paymentStateFilter">Payment:</label>
+          <label htmlFor="paymentStateFilter" className="mb-0">Payment:</label>
           <select
             id="paymentStateFilter"
             className="form-control filter-select"
@@ -313,18 +326,36 @@ function ExpenseList() {
             </div>
             {error && <div className="error" style={{ marginTop: 8 }}>{error}</div>}
             <div className="form-actions">
-              <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? 'Saving...' : (formData.id ? 'Update Record' : 'Create Record')}</button>
-              <button className="btn btn-secondary" type="button" onClick={resetForm}>Cancel</button>
+              <button className="btn btn-primary" type="submit" disabled={saving}>
+                {saving
+                  ? <><FontAwesomeIcon icon="fa-solid fa-spinner" className="fa-spin me-2" />Saving...</>
+                  : <><FontAwesomeIcon icon="fa-solid fa-check" className="me-2" />{formData.id ? 'Update Record' : 'Create Record'}</>}
+              </button>
+              <button className="btn btn-secondary" type="button" onClick={resetForm}>
+                <FontAwesomeIcon icon="fa-solid fa-xmark" className="me-2" />Cancel
+              </button>
             </div>
           </form>
         </div>
       )}
 
       <div className="summary-cards" style={{ marginBottom: 14 }}>
-        <div className="ops-card stat-card"><h3>{toInr(totals.total)}</h3><p>Total Amount</p></div>
-        <div className="ops-card stat-card pending"><h3>{toInr(totals.outstanding)}</h3><p>Total Outstanding</p></div>
-        <div className="ops-card stat-card"><h3>{toInr(totals.creditCard)}</h3><p>Credit Card Bills</p></div>
-        <div className="ops-card stat-card"><h3>{toInr(totals.debt)}</h3><p>Debt Records</p></div>
+        <div className="ops-card stat-card">
+          <h3>{toInr(totals.total)}</h3>
+          <p><FontAwesomeIcon icon="fa-solid fa-sack-dollar" className="me-1" />Total Amount</p>
+        </div>
+        <div className="ops-card stat-card pending">
+          <h3>{toInr(totals.outstanding)}</h3>
+          <p><FontAwesomeIcon icon="fa-solid fa-triangle-exclamation" className="me-1" />Total Outstanding</p>
+        </div>
+        <div className="ops-card stat-card">
+          <h3>{toInr(totals.creditCard)}</h3>
+          <p><FontAwesomeIcon icon="fa-solid fa-credit-card" className="me-1" />Credit Card Bills</p>
+        </div>
+        <div className="ops-card stat-card">
+          <h3>{toInr(totals.debt)}</h3>
+          <p><FontAwesomeIcon icon="fa-solid fa-coins" className="me-1" />Debt Records</p>
+        </div>
       </div>
 
       <div className="card">
@@ -369,13 +400,13 @@ function ExpenseList() {
                     onClick={() => startEdit(expense)}
                     className="btn btn-secondary btn-sm"
                   >
-                    Edit
+                    <FontAwesomeIcon icon="fa-solid fa-pencil" className="me-1" />Edit
                   </button>
                   <button 
                     onClick={() => handleDelete(expense._id)} 
                     className="btn btn-danger btn-sm"
                   >
-                    Delete
+                    <FontAwesomeIcon icon="fa-solid fa-trash" className="me-1" />Delete
                   </button>
                 </div>
               </div>

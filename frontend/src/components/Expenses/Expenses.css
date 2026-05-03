@@ -141,3 +141,98 @@ textarea.form-control {
     grid-template-columns: 1fr;
   }
 }
+
+/* Enhancement layer */
+.expenses-header {
+  margin-bottom: 24px;
+  gap: 16px;
+}
+
+.filter-group {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-select {
+  min-width: 220px;
+  border-color: #d6deea;
+  border-radius: 10px;
+}
+
+.expense-list {
+  gap: 16px;
+}
+
+.expense-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.expense-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1);
+  border-color: #d5deea;
+}
+
+.expense-details h3 {
+  margin-bottom: 6px;
+  color: #0f172a;
+}
+
+.expense-description {
+  color: #64748b;
+}
+
+.expense-meta {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.expense-actions {
+  gap: 12px;
+  min-width: 140px;
+}
+
+.expense-amount-large {
+  font-size: 1.5rem;
+  color: #0f766e;
+}
+
+.add-expense-container {
+  max-width: 760px;
+}
+
+.add-expense-card {
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.expense-form-grid {
+  gap: 16px;
+}
+
+.form-actions {
+  margin-top: 24px;
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .expense-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .expense-actions {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+}

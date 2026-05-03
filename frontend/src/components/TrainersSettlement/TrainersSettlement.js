@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { cycleTrackingAPI, trainerSettlementAPI, trainingEngagementAPI } from '../../services/api';
 
 const SETTLEMENT_STATUS = ['Planned', 'Partially Paid', 'Paid'];
@@ -814,13 +815,21 @@ export default function TrainersSettlement({ user }) {
   return (
     <section className="ops-page">
       <div className="ops-page-header">
-        <h1>Trainer Settlement</h1>
+        <h1><FontAwesomeIcon icon="fa-solid fa-hand-holding-dollar" className="me-2" style={{ color: '#423fdb' }} />Trainer Settlement</h1>
         <p>Track cleared and pending settlements with reasons, payment dependency, and 30/45 day cycle indicators.</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
-        <div className="ops-card" style={{ padding: '1rem' }}><p className="muted">Cleared Settlements</p><strong>{statusSummary.clearedCount}</strong><div>{fmt(statusSummary.clearedAmount)}</div></div>
-        <div className="ops-card" style={{ padding: '1rem' }}><p className="muted">Pending Settlements</p><strong>{statusSummary.pendingCount}</strong><div>{fmt(statusSummary.pendingAmount)}</div></div>
+        <div className="ops-card" style={{ padding: '1rem' }}>
+          <p className="muted"><FontAwesomeIcon icon="fa-solid fa-circle-check" className="me-1" style={{ color: '#16a34a' }} />Cleared Settlements</p>
+          <strong>{statusSummary.clearedCount}</strong>
+          <div>{fmt(statusSummary.clearedAmount)}</div>
+        </div>
+        <div className="ops-card" style={{ padding: '1rem' }}>
+          <p className="muted"><FontAwesomeIcon icon="fa-solid fa-clock" className="me-1" style={{ color: '#f59e0b' }} />Pending Settlements</p>
+          <strong>{statusSummary.pendingCount}</strong>
+          <div>{fmt(statusSummary.pendingAmount)}</div>
+        </div>
       </div>
 
       <article className="ops-card" style={{ marginBottom: '1.2rem' }}>
@@ -872,7 +881,9 @@ export default function TrainersSettlement({ user }) {
             <div className="ops-card" style={{ padding: '0.7rem' }}><p className="muted" style={{ margin: 0, fontSize: '0.72rem' }}>Margin Left</p><strong style={{ color: selectedMetrics.marginLeft >= 0 ? '#22c55e' : '#ef4444' }}>{fmt(selectedMetrics.marginLeft)}</strong></div>
           </div>
         )}
-        <button className="btn btn-primary" onClick={handleSave}>Save Settlement</button>
+        <button className="btn btn-primary" onClick={handleSave}>
+          <FontAwesomeIcon icon="fa-solid fa-check" className="me-2" />Save Settlement
+        </button>
       </article>
 
       <article className="ops-card" style={{ marginBottom: '1.2rem' }}>
@@ -904,8 +915,14 @@ export default function TrainersSettlement({ user }) {
                     <td>{fmt(item.amount)}</td>
                     <td>{reason}</td>
                     <td>
-                      {item.status !== 'Paid' && <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.72rem', marginRight: '6px' }} onClick={() => handleMarkPaid(item.id)}>Mark Paid</button>}
-                      <button className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '0.72rem' }} onClick={() => handleDelete(item.id)}>Delete</button>
+                      {item.status !== 'Paid' && (
+                        <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.72rem', marginRight: '6px' }} onClick={() => handleMarkPaid(item.id)}>
+                          <FontAwesomeIcon icon="fa-solid fa-circle-check" className="me-1" />Mark Paid
+                        </button>
+                      )}
+                      <button className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '0.72rem' }} onClick={() => handleDelete(item.id)}>
+                        <FontAwesomeIcon icon="fa-solid fa-trash" className="me-1" />Delete
+                      </button>
                     </td>
                   </tr>
                 );
@@ -940,10 +957,20 @@ export default function TrainersSettlement({ user }) {
           <label style={{ gridColumn: '1 / -1' }}><span className="muted" style={{ fontSize: '0.74rem' }}>Notes</span><input className="form-control" value={cycleForm.notes} onChange={(e) => setCycleForm((p) => ({ ...p, notes: e.target.value }))} /></label>
         </div>
         <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '0.9rem' }}>
-          <button className="btn btn-primary" onClick={handleCycleSave}>{cycleForm.id ? 'Update Record' : 'Save Record'}</button>
-          <button className="btn btn-secondary" onClick={() => setCycleForm(getEmptyCycleForm())}>Reset</button>
-          <button className="btn btn-secondary" onClick={exportCycleCsv}>Export CSV</button>
-          <button className="btn btn-secondary" onClick={exportCycleExcel}>Export Excel</button>
+          <button className="btn btn-primary" onClick={handleCycleSave}>
+            {cycleForm.id
+              ? <><FontAwesomeIcon icon="fa-solid fa-pencil" className="me-2" />Update Record</>
+              : <><FontAwesomeIcon icon="fa-solid fa-check" className="me-2" />Save Record</>}
+          </button>
+          <button className="btn btn-secondary" onClick={() => setCycleForm(getEmptyCycleForm())}>
+            <FontAwesomeIcon icon="fa-solid fa-rotate" className="me-2" />Reset
+          </button>
+          <button className="btn btn-secondary" onClick={exportCycleCsv}>
+            <FontAwesomeIcon icon="fa-solid fa-download" className="me-2" />Export CSV
+          </button>
+          <button className="btn btn-secondary" onClick={exportCycleExcel}>
+            <FontAwesomeIcon icon="fa-solid fa-download" className="me-2" />Export Excel
+          </button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.65rem', marginBottom: '0.8rem' }}>
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>Trainer</span><select className="form-control" value={agingTrainerFilter} onChange={(e) => setAgingTrainerFilter(e.target.value)}><option value="">All Trainers</option>{trainerNames.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
@@ -993,9 +1020,13 @@ export default function TrainersSettlement({ user }) {
                   </td>
                   <td style={{ color: row.marginLeft >= 0 ? '#16a34a' : '#dc2626', fontWeight: 600 }}>{fmt(row.marginLeft)}</td>
                   <td>
-                    <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.72rem', marginRight: '6px' }} onClick={() => handleCycleEdit(row)}>Edit</button>
+                    <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.72rem', marginRight: '6px' }} onClick={() => handleCycleEdit(row)}>
+                      <FontAwesomeIcon icon="fa-solid fa-pencil" className="me-1" />Edit
+                    </button>
                     {row.cycleRecordId && (
-                      <button className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '0.72rem' }} onClick={() => handleCycleDelete(row.cycleRecordId)}>Delete</button>
+                      <button className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '0.72rem' }} onClick={() => handleCycleDelete(row.cycleRecordId)}>
+                        <FontAwesomeIcon icon="fa-solid fa-trash" className="me-1" />Delete
+                      </button>
                     )}
                   </td>
                 </tr>
