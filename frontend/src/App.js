@@ -16,6 +16,7 @@ import Profile from './components/Profile/Profile';
 import TrainingEngagementsHub from './components/TrainingEngagements/TrainingEngagementsHub';
 import TrainersSettlement from './components/TrainersSettlement/TrainersSettlement';
 import EmployeeManager from './components/Admin/EmployeeManager';
+import InvoiceHub from './components/Invoices/InvoiceHub';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import { authAPI } from './services/api';
 import { DB_BACKED_KEYS, initDbBackedStorage } from './services/dbBackedStorage';
@@ -228,6 +229,10 @@ function App() {
             <Route
               path="animation-lab"
               element={<ProfitAnimationLab />}
+            />
+            <Route
+              path="invoices"
+              element={<InvoiceHub user={user} />}
             />
           </Route>
         </Routes>

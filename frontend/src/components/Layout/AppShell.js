@@ -15,6 +15,7 @@ const SUPERADMIN_NAV_ITEMS = [
   { to: '/master-data?tab=trainers', label: 'Master Data', icon: 'topic' },
   { to: '/expenses', label: 'Expenses & Debts', icon: 'log' },
   { to: '/trainer-settlements', label: 'Trainer Settlement', icon: 'payments' },
+  { to: '/invoices', label: 'Invoices', icon: 'invoice' },
   { to: '/employees', label: 'Employees', icon: 'employees' }
 ];
 
@@ -31,6 +32,15 @@ function Icon({ name }) {
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M5 3h9l5 5v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm8 1.8V9h4.2" />
         <path d="M8 12h8M8 16h8" />
+      </svg>
+    );
+  }
+  if (name === 'invoice') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M7 8h10M7 12h6M7 16h4" />
+        <path d="M15 16l1.5 1.5L19 14" />
       </svg>
     );
   }

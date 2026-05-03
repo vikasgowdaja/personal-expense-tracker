@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { X, ChevronLeft, Home, Calendar, GraduationCap, Database, Receipt, CircleDollarSign, Users } from 'lucide-react';
+import { X, ChevronLeft, Home, Calendar, GraduationCap, Database, Receipt, CircleDollarSign, Users, FileText } from 'lucide-react';
 import './AnimatedMenu.css';
 
 const IconMap = {
@@ -11,7 +11,8 @@ const IconMap = {
   topic: Database,
   log: Receipt,
   payments: CircleDollarSign,
-  employees: Users
+  employees: Users,
+  invoice: FileText
 };
 
 export default function AnimatedMenu({ isOpen, setIsOpen, navItems }) {
