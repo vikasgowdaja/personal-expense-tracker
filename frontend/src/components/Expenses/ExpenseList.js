@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { expenseAPI } from '../../services/api';
+import WheelPagination from '../ui/WheelPagination';
 import './Expenses.css';
 
 const DEFAULT_FORM = {
@@ -37,10 +38,17 @@ function ExpenseList() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState(DEFAULT_FORM);
+  const [currentPage, setCurrentPage] = useState(0);
+  const itemsPerPage = 6;
 
   useEffect(() => {
     loadExpenses();
   }, []);
+
+  // Reset pagination when filters or data change
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [filter, typeFilter, paymentStateFilter, expenses]);
 
   const loadExpenses = async () => {
     try {
@@ -370,7 +378,9 @@ function ExpenseList() {
               <div style={{ textAlign: 'right' }}>Actions</div>
             </div>
             <div>
-              {filteredExpenses.map((expense) => {
+              {(() => {
+                const paginatedExpenses = filteredExpenses.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage);
+                return paginatedExpenses.map((expense) => {
                 const isPaid = expense.paymentState === 'paid';
                 const isPending = expense.paymentState === 'pending';
                 const statusClass = isPaid ? 'active' : isPending ? 'inactive' : 'paused';
@@ -420,8 +430,16 @@ function ExpenseList() {
                     </button>
                   </div>
                 </div>
-              )})}
+              );
+              });
+              })()}
             </div>
+            
+            <WheelPagination 
+              totalPages={Math.ceil(filteredExpenses.length / itemsPerPage)}
+              currentPage={currentPage}
+              onChange={setCurrentPage}
+            />
           </>
         ) : (
           <p className="no-data">No expenses found</p>

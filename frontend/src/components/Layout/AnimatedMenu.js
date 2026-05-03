@@ -108,17 +108,24 @@ export default function AnimatedMenu({ isOpen, setIsOpen, navItems }) {
           whileHover={{ scale: 1.1, rotate: 90 }}
           whileTap={{ scale: 0.9 }}
           onClick={() => setIsOpen(false)}
+          onPointerDownCapture={(e) => e.stopPropagation()}
           className="am-close-btn"
+          type="button"
         >
           <X size={24} />
         </motion.button>
 
-        <motion.div
+        <motion.button
           style={{ opacity: dragOpacity }}
           className="am-drag-indicator"
+          onClick={() => setIsOpen(false)}
+          onPointerDownCapture={(e) => e.stopPropagation()}
+          type="button"
+          whileHover={{ scale: 1.2 }}
+          whileTap={{ scale: 0.9 }}
         >
           <ChevronLeft size={32} />
-        </motion.div>
+        </motion.button>
 
         <div className="am-nav-content">
           <motion.div

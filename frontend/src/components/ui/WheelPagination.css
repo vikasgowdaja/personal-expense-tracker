@@ -1,0 +1,69 @@
+.wheel-pagination-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  user-select: none;
+  cursor: pointer;
+  margin: 20px auto;
+  justify-content: center;
+  width: 100%;
+}
+
+.wheel-nav-btn {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.wheel-nav-btn:hover:not(:disabled) {
+  background-color: #f3f4f6;
+  color: #2563eb;
+}
+
+.wheel-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.wheel-pages-wrapper {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.wheel-page-btn {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background-color: #e5e7eb;
+  color: #1f2937;
+  font-size: 0.9rem;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.wheel-page-btn.active {
+  background-color: #2563eb;
+  color: white;
+  border-color: #2563eb;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.wheel-page-btn:hover:not(.active) {
+  background-color: #d1d5db;
+}

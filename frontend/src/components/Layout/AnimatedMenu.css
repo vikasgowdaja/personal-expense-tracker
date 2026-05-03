@@ -22,6 +22,7 @@
   position: absolute;
   top: 24px;
   right: 24px;
+  z-index: 50;
   padding: 8px;
   border-radius: 9999px;
   background-color: #f3f4f6;
@@ -43,11 +44,22 @@
   top: 50%;
   right: 16px;
   transform: translateY(-50%);
-  pointer-events: none;
   color: #9ca3af;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: background-color 0.2s, color 0.2s;
+  z-index: 50;
+}
+
+.am-drag-indicator:hover {
+  background-color: #f3f4f6;
+  color: #4b5563;
 }
 
 .am-nav-content {

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { clientAPI, employeeAPI, institutionAPI, topicAPI, trainerAPI, trainerSettlementAPI, trainingEngagementAPI } from '../../services/api';
 import ProfitJarAnimation from '../Common/ProfitJarAnimation';
+import WheelPagination from '../ui/WheelPagination';
 
 const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -375,6 +376,13 @@ function TrainingEngagementsHub({ user }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkSourcedBy, setBulkSourcedBy] = useState('');
   const [bulkSourcedByName, setBulkSourcedByName] = useState('');
+
+  const [currentPage, setCurrentPage] = useState(0);
+  const itemsPerPage = 8;
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [filterCollege, filterOrganization, filterTrainer, filterStatus]);
 
   const persist = (next) => {
     setEngagements(next);
@@ -1107,7 +1115,6 @@ function TrainingEngagementsHub({ user }) {
             setPickerMonth(new Date());
             refreshLookups();
           }}>{editId ? 'Editing...' : '+ Add Engagement'}</button>
-          <button className={`btn ${activeTab === 'records' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setActiveTab('records')}>Records</button>
         </div>
       </div>
 
@@ -1365,10 +1372,10 @@ function TrainingEngagementsHub({ user }) {
         </div>
       )}
 
-      {activeTab === 'records' && (
+      {activeTab === 'overview' && (
         <div className="ops-card" style={{ marginTop: '1.5rem' }}>
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
-            <h3 style={{ margin: 0 }}>All Engagement Records</h3>
+            <h3 style={{ margin: 0 }}>Engagement Overview & Records</h3>
             <select className="form-control" style={{ width: 'auto', minWidth: '180px' }} value={filterCollege} onChange={(e) => setFilterCollege(e.target.value)}>
               <option value="">All Colleges</option>
               {[...new Set(visibleEngagements.map((x) => x.college))].map((x) => <option key={x} value={x}>{x}</option>)}
@@ -1487,7 +1494,9 @@ function TrainingEngagementsHub({ user }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((x, i) => (
+                  {(() => {
+                    const paginated = filtered.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage);
+                    return paginated.map((x, i) => (
                     <tr
                       key={x.id}
                       style={selectedIds.has(x.id) ? { background: '#f5f3ff' } : {}}
@@ -1499,7 +1508,7 @@ function TrainingEngagementsHub({ user }) {
                           onChange={() => toggleSelectId(x.id)}
                         />
                       </td>
-                      <td className="sno-cell">{i + 1}</td>
+                      <td className="sno-cell">{(currentPage * itemsPerPage) + i + 1}</td>
                       <td><span className="status-pill pill-blue">{x.topic}</span></td>
                       <td>{x.trainerName || '—'}</td>
                       <td><span className="college-cell-badge">{x.college}</span></td>
@@ -1615,61 +1624,15 @@ function TrainingEngagementsHub({ user }) {
                         })()}
                       </td>
                     </tr>
-                  ))}
+                  ));
+                  })()}
                 </tbody>
               </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'overview' && (
-        <div className="ops-card" style={{ marginTop: '1.5rem' }}>
-          <h3>Engagement Overview</h3>
-          {visibleEngagements.length === 0 ? (
-            <p className="muted">No engagements yet. Use + Add Engagement.</p>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="ops-table">
-                <thead>
-                  <tr>
-                    <th className="sno-th">#</th>
-                    <th>Topic</th>
-                    <th>Trainer</th>
-                    <th>College</th>
-                    <th>Organization</th>
-                    <th>Sourced By</th>
-                    <th>Date Range</th>
-                    <th>Days</th>
-                    {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>Gross</th>}
-                    {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>TDS</th>}
-                    {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>Net</th>}
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleEngagements.slice(0, 8).map((x, i) => (
-                    <tr key={x.id}>
-                      <td className="sno-cell">{i + 1}</td>
-                      <td>{x.topic}</td>
-                      <td>{x.trainerName || '—'}</td>
-                      <td><span className="college-cell-badge">{x.college}</span></td>
-                      <td>{x.organization}</td>
-                      <td style={{ whiteSpace: 'nowrap', fontSize: '0.82rem' }}>
-                        {x.sourcedBy ? (
-                          <span title={x.sourcedByName || x.sourcedBy} style={{ fontWeight: 600, color: '#7c3aed' }}>{x.sourcedBy}</span>
-                        ) : '—'}
-                      </td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{formatDateSummary(x)}</td>
-                      <td>{x.totalDays}</td>
-                      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td>{toInr(getGrossAmount(x))}</td>}
-                      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td>{toInr(getTdsAmount(x))}</td>}
-                      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td>{toInr(getNetAmount(x))}</td>}
-                      <td><span className="status-pill pill-neutral">{x.paymentStatus || 'Invoiced'}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <WheelPagination 
+                totalPages={Math.ceil(filtered.length / itemsPerPage)}
+                currentPage={currentPage}
+                onChange={setCurrentPage}
+              />
             </div>
           )}
         </div>
