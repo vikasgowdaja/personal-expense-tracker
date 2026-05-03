@@ -358,60 +358,71 @@ function ExpenseList() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="smt-container">
         {filteredExpenses.length > 0 ? (
-          <div className="expense-list">
-            {filteredExpenses.map((expense) => (
-              <div key={expense._id} className="expense-card">
-                <div className="expense-details">
-                  <h3>{expense.title}</h3>
-                  <p className="expense-description">{expense.description}</p>
-                  <div className="expense-meta">
-                    <span className={`category-badge ${expense.category.toLowerCase()}`}>
-                      {expense.category}
-                    </span>
-                    <span className="category-badge other" title="Record Type">
-                      {(expense.entryType || 'expense').replace(/_/g, ' ')}
-                    </span>
-                    <span className="category-badge bills" title="Payment State">
-                      {expense.paymentState || 'paid'}
-                    </span>
-                    <span className="expense-date">
-                      {new Date(expense.date).toLocaleDateString()}
-                    </span>
-                    {expense.dueDate && (
-                      <span className="expense-date">Due: {new Date(expense.dueDate).toLocaleDateString()}</span>
-                    )}
-                    {expense.linkedTrainerName && (
-                      <span className="expense-date">Trainer: {expense.linkedTrainerName}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="expense-actions">
-                  <div className="expense-amount-large">
-                    {toInr(expense.amount)}
-                  </div>
-                  {Number(expense.outstandingAmount || 0) > 0 && (
-                    <div className="expense-date" style={{ color: '#b91c1c', fontWeight: 700 }}>
-                      Outstanding: {toInr(expense.outstandingAmount)}
+          <>
+            <div className="smt-header">
+              <div>Description</div>
+              <div>Category</div>
+              <div>Date</div>
+              <div>Amount</div>
+              <div>Status</div>
+              <div style={{ textAlign: 'right' }}>Actions</div>
+            </div>
+            <div>
+              {filteredExpenses.map((expense) => {
+                const isPaid = expense.paymentState === 'paid';
+                const isPending = expense.paymentState === 'pending';
+                const statusClass = isPaid ? 'active' : isPending ? 'inactive' : 'paused';
+                
+                return (
+                <div key={expense._id} className="smt-row">
+                  <div className={`smt-gradient-overlay smt-gradient-${statusClass}`}></div>
+                  
+                  <div className="smt-cell smt-title">
+                    <div className="smt-icon" style={{ background: expense.entryType === 'debt' ? '#f59e0b' : expense.entryType === 'credit_card_bill' ? '#8b5cf6' : '#3b82f6' }}>
+                      <FontAwesomeIcon icon={expense.entryType === 'debt' ? 'fa-solid fa-coins' : expense.entryType === 'credit_card_bill' ? 'fa-solid fa-credit-card' : 'fa-solid fa-receipt'} />
                     </div>
-                  )}
-                  <button
-                    onClick={() => startEdit(expense)}
-                    className="btn btn-secondary btn-sm"
-                  >
-                    <FontAwesomeIcon icon="fa-solid fa-pencil" className="me-1" />Edit
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(expense._id)} 
-                    className="btn btn-danger btn-sm"
-                  >
-                    <FontAwesomeIcon icon="fa-solid fa-trash" className="me-1" />Delete
-                  </button>
+                    <div>
+                      {expense.title}
+                      {expense.description && <span className="smt-subtitle">{expense.description}</span>}
+                    </div>
+                  </div>
+                  
+                  <div className="smt-cell">
+                    <span className={`category-badge ${expense.category.toLowerCase()}`}>{expense.category}</span>
+                  </div>
+                  
+                  <div className="smt-cell">
+                    <div style={{ color: '#0f172a', fontWeight: 500 }}>{new Date(expense.date).toLocaleDateString()}</div>
+                    {expense.dueDate && <div className="smt-subtitle">Due: {new Date(expense.dueDate).toLocaleDateString()}</div>}
+                  </div>
+                  
+                  <div className="smt-cell">
+                    <div className="smt-amount">{toInr(expense.amount)}</div>
+                    {Number(expense.outstandingAmount || 0) > 0 && (
+                      <div className="smt-subtitle" style={{ color: '#dc2626', fontWeight: 600 }}>O/S: {toInr(expense.outstandingAmount)}</div>
+                    )}
+                  </div>
+                  
+                  <div className="smt-cell">
+                    <span className={`smt-badge smt-badge-${statusClass}`}>
+                      {(expense.paymentState || 'paid').replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  
+                  <div className="smt-cell smt-actions" style={{ justifyContent: 'flex-end' }}>
+                    <button onClick={() => startEdit(expense)} className="btn btn-secondary btn-sm" style={{ padding: '6px 10px' }} title="Edit">
+                      <FontAwesomeIcon icon="fa-solid fa-pencil" />
+                    </button>
+                    <button onClick={() => handleDelete(expense._id)} className="btn btn-danger btn-sm" style={{ padding: '6px 10px' }} title="Delete">
+                      <FontAwesomeIcon icon="fa-solid fa-trash" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              )})}
+            </div>
+          </>
         ) : (
           <p className="no-data">No expenses found</p>
         )}
