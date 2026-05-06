@@ -137,9 +137,9 @@ function normalizeSettlement(row) {
 }
 
 const DASHBOARD_TABS = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'insights', label: 'Insights', adminOnly: true },
-  { key: 'financial', label: 'Financial Reports', adminOnly: true }
+  { key: 'overview', label: 'Overview', route: '/dashboard' },
+  { key: 'insights', label: 'Insights', adminOnly: true, route: '/insights' },
+  { key: 'financial', label: 'Financial Reports', adminOnly: true, route: '/financial-reports' }
 ];
 
 function Dashboard({ user }) {
@@ -155,11 +155,13 @@ function Dashboard({ user }) {
     return 'overview';
   }, [location.search, isAdmin]);
 
-  function setTab(key) {
-    if (key === 'overview') {
+  function setTab(t) {
+    if (t.route) {
+      navigate(t.route);
+    } else if (t.key === 'overview') {
       navigate('/dashboard');
     } else {
-      navigate(`/dashboard?tab=${key}`);
+      navigate(`/dashboard?tab=${t.key}`);
     }
   }
 
@@ -539,7 +541,7 @@ function Dashboard({ user }) {
             <button
               key={t.key}
               className={`dashboard-tab-btn${activeTab === t.key ? ' active' : ''}`}
-              onClick={() => setTab(t.key)}
+              onClick={() => setTab(t)}
             >
               {t.label}
             </button>
@@ -552,55 +554,123 @@ function Dashboard({ user }) {
       {activeTab === 'overview' && (
         <>
         <div className="summary-cards dashboard-summary-grid">
-        <div className="ops-card summary-card teaching-stat-card accent-green">
+        <div className="ops-card summary-card teaching-stat-card accent-green" role="button" tabIndex={0}
+          title="View Financial Reports"
+          style={{ cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+          onClick={() => navigate('/dashboard?tab=financial')}
+          onKeyDown={e => e.key === 'Enter' && navigate('/dashboard?tab=financial')}
+          onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,0.12)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow=''; }}>
           <div className="stat-value">{inr(analytics.totals.gross)}</div>
           <div className="stat-label">Overall Revenue (Gross)</div>
+          <div style={{ fontSize: '0.7rem', color: '#16a34a', marginTop: 4, fontWeight: 600 }}>→ Financial Reports</div>
         </div>
-        <div className="ops-card summary-card teaching-stat-card accent-blue">
+        <div className="ops-card summary-card teaching-stat-card accent-blue" role="button" tabIndex={0}
+          title="View Financial Reports"
+          style={{ cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+          onClick={() => navigate('/financial-reports')}
+          onKeyDown={e => e.key === 'Enter' && navigate('/financial-reports')}
+          onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,0.12)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow=''; }}>
           <div className="stat-value">{inr(analytics.totals.tds)}</div>
           <div className="stat-label">Overall TDS</div>
+          <div style={{ fontSize: '0.7rem', color: '#2563eb', marginTop: 4, fontWeight: 600 }}>→ Financial Reports</div>
         </div>
-        <div className="ops-card summary-card teaching-stat-card accent-purple">
+        <div className="ops-card summary-card teaching-stat-card accent-purple" role="button" tabIndex={0}
+          title="View Financial Reports"
+          style={{ cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+          onClick={() => navigate('/financial-reports')}
+          onKeyDown={e => e.key === 'Enter' && navigate('/financial-reports')}
+          onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,0.12)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow=''; }}>
           <div className="stat-value">{inr(analytics.totals.net)}</div>
           <div className="stat-label">In-hand Revenue</div>
+          <div style={{ fontSize: '0.7rem', color: '#7c3aed', marginTop: 4, fontWeight: 600 }}>→ Financial Reports</div>
         </div>
         {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
-          <div className="ops-card summary-card teaching-stat-card accent-blue">
+          <div className="ops-card summary-card teaching-stat-card accent-blue" role="button" tabIndex={0}
+            title="View Trainer Settlements"
+            style={{ cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+            onClick={() => navigate('/trainer-settlements')}
+            onKeyDown={e => e.key === 'Enter' && navigate('/trainer-settlements')}
+            onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,0.12)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow=''; }}>
             <div className="stat-value">{inr(analytics.overallSettlementPaid)}</div>
             <div className="stat-label">Trainer Settlement (Paid)</div>
+            <div style={{ fontSize: '0.7rem', color: '#2563eb', marginTop: 4, fontWeight: 600 }}>→ Trainer Settlements</div>
           </div>
         )}
         {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
-          <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#d97706' }}>
+          <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#d97706', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+            role="button" tabIndex={0} title="View Pending Settlements"
+            onClick={() => navigate('/trainer-settlements')}
+            onKeyDown={e => e.key === 'Enter' && navigate('/trainer-settlements')}
+            onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,0.12)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow=''; }}>
             <div className="stat-value" style={{ color: '#d97706' }}>{inr(analytics.pendingSettlementAmount)}</div>
             <div className="stat-label">Pending Settlements</div>
             <div className="muted" style={{ marginTop: 6, fontSize: '0.75rem' }}>{analytics.pendingSettlementCount} open item(s)</div>
+            <div style={{ fontSize: '0.7rem', color: '#d97706', marginTop: 4, fontWeight: 600 }}>→ Trainer Settlements</div>
           </div>
         )}
-        <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#dc2626' }}>
+        <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#dc2626', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+          role="button" tabIndex={0} title="View Insights – Pending Recovery"
+          onClick={() => navigate('/insights')}
+          onKeyDown={e => e.key === 'Enter' && navigate('/insights')}
+          onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,0.12)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow=''; }}>
           <div className="stat-value" style={{ color: '#dc2626' }}>{inr(analytics.pendingRecoveryFromPayers)}</div>
           <div className="stat-label">Pending Recovery from Payers</div>
           <div className="muted" style={{ marginTop: 6, fontSize: '0.75rem' }}>{analytics.pendingRecoveryCount} engagement(s) unpaid</div>
+          <div style={{ fontSize: '0.7rem', color: '#dc2626', marginTop: 4, fontWeight: 600 }}>→ Insights</div>
         </div>
         {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
-          <div className="ops-card summary-card teaching-stat-card accent-green">
+          <div className="ops-card summary-card teaching-stat-card accent-green" role="button" tabIndex={0}
+            title="View Financial Reports – Margins"
+            style={{ cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+            onClick={() => navigate('/dashboard?tab=financial')}
+            onKeyDown={e => e.key === 'Enter' && navigate('/dashboard?tab=financial')}
+            onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,0.12)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow=''; }}>
             <div className="stat-value">{inr(analytics.overallMarginAmount)}</div>
             <div className="stat-label">Company Margin</div>
+            <div style={{ fontSize: '0.7rem', color: '#16a34a', marginTop: 4, fontWeight: 600 }}>→ Financial Reports</div>
           </div>
         )}
         {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
-          <div className="ops-card summary-card teaching-stat-card">
+          <div className="ops-card summary-card teaching-stat-card" role="button" tabIndex={0}
+            title="View Financial Reports – Margins"
+            style={{ cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+            onClick={() => navigate('/dashboard?tab=financial')}
+            onKeyDown={e => e.key === 'Enter' && navigate('/dashboard?tab=financial')}
+            onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,0.12)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow=''; }}>
             <div className="stat-value">{analytics.overallMarginPercent.toFixed(2)}%</div>
             <div className="stat-label">Margin %</div>
+            <div style={{ fontSize: '0.7rem', color: '#4b5563', marginTop: 4, fontWeight: 600 }}>→ Financial Reports</div>
           </div>
         )}
-        <div className="ops-card summary-card teaching-stat-card">
+        <div className="ops-card summary-card teaching-stat-card" role="button" tabIndex={0}
+          title="View All Engagements"
+          style={{ cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+          onClick={() => navigate('/training-engagements')}
+          onKeyDown={e => e.key === 'Enter' && navigate('/training-engagements')}
+          onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,0.12)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow=''; }}>
           <div className="stat-value">{engagements.length}</div>
           <div className="stat-label">No. of Engagements</div>
+          <div style={{ fontSize: '0.7rem', color: '#4b5563', marginTop: 4, fontWeight: 600 }}>→ Training Engagements</div>
         </div>
-        <div className="ops-card summary-card teaching-stat-card">
+        <div className="ops-card summary-card teaching-stat-card" role="button" tabIndex={0}
+          title="View All Trainers"
+          style={{ cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+          onClick={() => navigate('/master-data?tab=trainers')}
+          onKeyDown={e => e.key === 'Enter' && navigate('/master-data?tab=trainers')}
+          onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,0.12)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow=''; }}>
           <div className="stat-value">{trainers.length}</div>
           <div className="stat-label">No. of Trainers</div>
+          <div style={{ fontSize: '0.7rem', color: '#4b5563', marginTop: 4, fontWeight: 600 }}>→ Master Data – Trainers</div>
         </div>
       </div>
 
