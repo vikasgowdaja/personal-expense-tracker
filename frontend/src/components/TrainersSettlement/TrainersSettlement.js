@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { cycleTrackingAPI, trainerSettlementAPI, trainingEngagementAPI } from '../../services/api';
 
-const SETTLEMENT_STATUS = ['Planned', 'Partially Paid', 'Paid'];
+const SETTLEMENT_STATUS = ['Pending Approval', 'Approved', 'Planned', 'Partially Paid', 'Paid'];
 const PLACEHOLDER_TRAINER_PATTERN = /independent engagement/i;
 const DEFAULT_TDS_PERCENT = 10;
+const OPEN_SETTLEMENT_FILTER = '__open__';
+const UNPAID_ORG_FILTER = '__unpaid__';
 
 function fmt(n) {
   return `₹${Number(n || 0).toLocaleString('en-IN')}`;
@@ -158,7 +161,8 @@ function parseNet(row) {
 }
 
 export default function TrainersSettlement({ user }) {
-  const [loading, setLoading] = useState(true);
+  const [searchParams] = useSearchParams();
+  const [, setLoading] = useState(true);
   const [trainingRows, setTrainingRows] = useState([]);
   const [settlements, setSettlements] = useState([]);
   const [cycleRecords, setCycleRecords] = useState([]);
@@ -171,6 +175,8 @@ export default function TrainersSettlement({ user }) {
   const [agingToDate, setAgingToDate] = useState('');
   const [agingSortBy, setAgingSortBy] = useState('age');
   const [agingSortDir, setAgingSortDir] = useState('desc');
+  const [approveModal, setApproveModal] = useState(null); // { row } | null
+  const [approvePerDay, setApprovePerDay] = useState('');
   const [settlementForm, setSettlementForm] = useState({
     id: '',
     trainingRecordId: '',
@@ -189,6 +195,23 @@ export default function TrainersSettlement({ user }) {
     notes: ''
   });
   const [cycleForm, setCycleForm] = useState(getEmptyCycleForm());
+
+  useEffect(() => {
+    const requestedTrainerStatus = searchParams.get('trainerStatus');
+    if (!requestedTrainerStatus) {
+      setAgingTrainerStatusFilter('');
+      return;
+    }
+
+    if (requestedTrainerStatus.toLowerCase() === 'open') {
+      setAgingTrainerStatusFilter(OPEN_SETTLEMENT_FILTER);
+      return;
+    }
+
+    const supportedStatuses = ['Paid', 'Not Started', 'Partially Paid', 'Pending'];
+    const nextStatus = supportedStatuses.find((item) => item.toLowerCase() === requestedTrainerStatus.toLowerCase()) || '';
+    setAgingTrainerStatusFilter(nextStatus);
+  }, [searchParams]);
 
   const loadData = useCallback(async () => {
     try {
@@ -246,8 +269,12 @@ export default function TrainersSettlement({ user }) {
       if (selectedTrainerName) params.trainerName = selectedTrainerName;
       if (agingCollegeFilter) params.collegeName = agingCollegeFilter;
       if (agingOrganizationFilter) params.organizationName = agingOrganizationFilter;
-      if (agingOrgStatusFilter) params.orgPaymentStatus = agingOrgStatusFilter;
-      if (agingTrainerStatusFilter) params.trainerSettlementStatus = agingTrainerStatusFilter;
+      if (agingOrgStatusFilter && agingOrgStatusFilter !== UNPAID_ORG_FILTER) {
+        params.orgPaymentStatus = agingOrgStatusFilter;
+      }
+      if (agingTrainerStatusFilter && agingTrainerStatusFilter !== OPEN_SETTLEMENT_FILTER) {
+        params.trainerSettlementStatus = agingTrainerStatusFilter;
+      }
       if (agingFromDate) params.fromDate = agingFromDate;
       if (agingToDate) params.toDate = agingToDate;
 
@@ -413,6 +440,54 @@ export default function TrainersSettlement({ user }) {
     }
   };
 
+  const handleApproveSettlement = (row) => {
+    setApprovePerDay('');
+    setApproveModal({ row });
+  };
+
+  const handleApproveConfirm = async () => {
+    const row = approveModal?.row;
+    if (!row) return;
+    const perDay = Number(approvePerDay || 0);
+    if (!perDay || perDay <= 0) return;
+
+    const eng = trainingRows.find((e) => e.id === row.trainingRecordId);
+    const totalDays = eng?.totalDays || row.totalDays || 0;
+    const amount = perDay * totalDays;
+
+    const updatePayload = {
+      status: 'Approved',
+      perDayPayment: perDay,
+      amount,
+      totalDays,
+      engagementLabel: eng?.topic || row.engagementLabel || '',
+      trainerId: eng?.trainerId || row.trainerId || '',
+      trainerName: eng?.trainerName || row.trainerName || '',
+      collegeName: eng?.college || row.collegeName || '',
+      organizationName: eng?.organization || row.organizationName || '',
+      startDate: eng?.startDate || row.startDate || '',
+      endDate: eng?.endDate || row.endDate || ''
+    };
+
+    try {
+      await trainerSettlementAPI.update(row.id, updatePayload);
+      setApproveModal(null);
+      await loadData();
+    } catch (err) {
+      window.alert(err?.response?.data?.message || 'Unable to approve settlement.');
+    }
+  };
+
+  const handleRejectSettlement = async (id) => {
+    if (!window.confirm('Reject and delete this approval request?')) return;
+    try {
+      await trainerSettlementAPI.delete(id);
+      await loadData();
+    } catch (err) {
+      window.alert(err?.response?.data?.message || 'Unable to reject settlement.');
+    }
+  };
+
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this settlement?')) return;
     try {
@@ -425,7 +500,7 @@ export default function TrainersSettlement({ user }) {
 
   const statusSummary = useMemo(() => {
     const cleared = settlements.filter((item) => item.status === 'Paid');
-    const pending = settlements.filter((item) => item.status !== 'Paid');
+    const pending = settlements.filter((item) => item.status !== 'Paid' && item.status !== 'Pending Approval');
     return {
       clearedCount: cleared.length,
       pendingCount: pending.length,
@@ -433,6 +508,11 @@ export default function TrainersSettlement({ user }) {
       pendingAmount: pending.reduce((s, i) => s + Number(i.amount || 0), 0)
     };
   }, [settlements]);
+
+  const pendingApprovals = useMemo(() =>
+    settlements.filter((item) => (item.status || '').toLowerCase() === 'pending approval'),
+    [settlements]
+  );
 
   const selectedMetrics = useMemo(() => {
     if (!settlementForm.trainingRecordId) return null;
@@ -514,7 +594,7 @@ export default function TrainersSettlement({ user }) {
 
   const handleCycleEdit = (row) => {
     setCycleForm({
-      id: row.cycleRecordId || row.id,
+      id: row.cycleRecordId || '',   // empty = no DB record yet → save will CREATE
       trainingRecordId: row.trainingRecordId || '',
       trainerName: row.trainerName || '',
       college: row.college || '',
@@ -770,7 +850,18 @@ export default function TrainersSettlement({ user }) {
       };
     });
 
-    return [...mergedRows, ...manualRows]
+    // Deduplicate: same trainer+college+engagement label should appear only once.
+    // When duplicates exist, prefer the one with a cycleRecordId (DB override) over a pure computed row.
+    const dedupMap = new Map();
+    [...mergedRows, ...manualRows].forEach((row) => {
+      const key = `${(row.trainerName || '').toLowerCase()}|${(row.college || '').toLowerCase()}|${(row.label || '').toLowerCase()}`;
+      const existing = dedupMap.get(key);
+      if (!existing || (!existing.cycleRecordId && row.cycleRecordId)) {
+        dedupMap.set(key, row);
+      }
+    });
+
+    return [...dedupMap.values()]
       .filter((row) => {
         if (agingTrainerFilter) {
           const byId = row.trainerId === agingTrainerFilter;
@@ -780,8 +871,10 @@ export default function TrainersSettlement({ user }) {
         }
         if (agingCollegeFilter && row.college !== agingCollegeFilter) return false;
         if (agingOrganizationFilter && row.organization !== agingOrganizationFilter) return false;
-        if (agingOrgStatusFilter && row.orgPaymentStatus !== agingOrgStatusFilter) return false;
-        if (agingTrainerStatusFilter && row.trainerSettlementStatus !== agingTrainerStatusFilter) return false;
+        if (agingOrgStatusFilter === UNPAID_ORG_FILTER && row.orgPaymentStatus === 'Paid') return false;
+        if (agingOrgStatusFilter && agingOrgStatusFilter !== UNPAID_ORG_FILTER && row.orgPaymentStatus !== agingOrgStatusFilter) return false;
+        if (agingTrainerStatusFilter === OPEN_SETTLEMENT_FILTER && row.trainerSettlementStatus === 'Paid') return false;
+        if (agingTrainerStatusFilter && agingTrainerStatusFilter !== OPEN_SETTLEMENT_FILTER && row.trainerSettlementStatus !== agingTrainerStatusFilter) return false;
         if (agingFromDate && (!row.refDate || new Date(row.refDate) < new Date(agingFromDate))) return false;
         if (agingToDate && (!row.refDate || new Date(row.refDate) > new Date(agingToDate))) return false;
         return true;
@@ -809,15 +902,168 @@ export default function TrainersSettlement({ user }) {
     [engagementOptions]
   );
 
-  const agingOrgStatusOptions = ['Paid', 'Not Matured', 'Recovery Due', 'Recovery Overdue'];
+  const orgPaymentStatusOptions = ['Paid', 'Not Matured', 'Recovery Due', 'Recovery Overdue'];
   const agingTrainerStatusOptions = ['Paid', 'Not Started', 'Partially Paid', 'Pending'];
 
   return (
     <section className="ops-page">
+
+      {/* ── Approve Settlement Modal ── */}
+      {approveModal && (() => {
+        const { row } = approveModal;
+        const eng = trainingRows.find((e) => e.id === row.trainingRecordId);
+        const totalDays = eng?.totalDays || row.totalDays || 0;
+        const perDay = Number(approvePerDay || 0);
+        const previewAmount = perDay > 0 ? perDay * totalDays : 0;
+        return (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <div style={{
+              background: '#fff', borderRadius: '16px',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+              padding: '32px 36px', width: '100%', maxWidth: '460px'
+            }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#111827' }}>Approve Settlement</h3>
+                  <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#6b7280' }}>Set the per-day payment rate for this trainer</p>
+                </div>
+                <button onClick={() => setApproveModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: '#9ca3af', lineHeight: 1, padding: 0 }}>✕</button>
+              </div>
+
+              {/* Details card */}
+              <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '14px 16px', marginBottom: 20 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px', fontSize: '13px' }}>
+                  <div><span style={{ color: '#9ca3af', display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trainer</span><span style={{ fontWeight: 700, color: '#111827' }}>{row.trainerName || '—'}</span></div>
+                  <div><span style={{ color: '#9ca3af', display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>College</span><span style={{ fontWeight: 600, color: '#374151' }}>{eng?.college || row.collegeName || '—'}</span></div>
+                  <div><span style={{ color: '#9ca3af', display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Organization</span><span style={{ color: '#374151' }}>{eng?.organization || row.organizationName || '—'}</span></div>
+                  <div><span style={{ color: '#9ca3af', display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>No. of Days</span><span style={{ fontWeight: 700, color: '#374151' }}>{totalDays}</span></div>
+                  {(eng?.startDate || row.startDate) && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <span style={{ color: '#9ca3af', display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Period</span>
+                      <span style={{ color: '#374151' }}>{fmtDate(eng?.startDate || row.startDate)} → {fmtDate(eng?.endDate || row.endDate)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Per-day input */}
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                Per-Day Payment (₹)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={approvePerDay}
+                onChange={(e) => setApprovePerDay(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleApproveConfirm()}
+                placeholder="e.g. 5000"
+                autoFocus
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  border: '1.5px solid #d1d5db', borderRadius: '8px',
+                  padding: '10px 14px', fontSize: '15px', fontWeight: 600,
+                  outline: 'none', marginBottom: 12
+                }}
+              />
+
+              {/* Live preview */}
+              {previewAmount > 0 && (
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 14px', marginBottom: 18, fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#15803d' }}>Total Settlement</span>
+                  <span style={{ fontWeight: 800, fontSize: '16px', color: '#16a34a' }}>₹{previewAmount.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setApproveModal(null)}
+                  style={{ padding: '9px 20px', borderRadius: '8px', border: '1.5px solid #d1d5db', background: '#fff', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: '#374151' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleApproveConfirm}
+                  disabled={!approvePerDay || Number(approvePerDay) <= 0}
+                  style={{
+                    padding: '9px 24px', borderRadius: '8px', border: 'none',
+                    background: (!approvePerDay || Number(approvePerDay) <= 0) ? '#d1d5db' : '#16a34a',
+                    color: '#fff', cursor: (!approvePerDay || Number(approvePerDay) <= 0) ? 'not-allowed' : 'pointer',
+                    fontSize: '13px', fontWeight: 700
+                  }}
+                >
+                  ✓ Approve & Save
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="ops-page-header">
         <h1><FontAwesomeIcon icon="fa-solid fa-hand-holding-dollar" className="me-2" style={{ color: '#423fdb' }} />Trainer Settlement</h1>
         <p>Track cleared and pending settlements with reasons, payment dependency, and 30/45 day cycle indicators.</p>
       </div>
+
+      {/* ── Approval Inbox ── employee-submitted settlement requests awaiting admin action */}
+      {pendingApprovals.length > 0 && (
+        <article className="ops-card" style={{ marginBottom: '1.2rem', border: '1.5px solid #fbbf24', background: '#fffbeb' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <span style={{ fontSize: '18px' }}>🔔</span>
+            <h3 style={{ margin: 0, color: '#92400e', fontSize: '1rem' }}>
+              Settlement Approval Requests
+            </h3>
+            <span style={{
+              background: '#fde68a', color: '#78350f', borderRadius: 999,
+              padding: '2px 10px', fontSize: '12px', fontWeight: 700
+            }}>{pendingApprovals.length}</span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: '#fef3c7' }}>
+                  {['Employee / Trainer', 'College', 'Organization', 'Days', 'Engagement', 'Notes', 'Actions'].map((h) => (
+                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid #fde68a', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pendingApprovals.map((row) => (
+                  <tr key={row.id} style={{ borderBottom: '1px solid #fef9c3' }}>
+                    <td style={{ padding: '9px 12px', fontWeight: 600 }}>{row.trainerName || '—'}</td>
+                    <td style={{ padding: '9px 12px' }}>{row.collegeName || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: '#6b7280' }}>{row.organizationName || '—'}</td>
+                    <td style={{ padding: '9px 12px' }}>{row.totalDays || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: '#6b7280', fontSize: '12px' }}>{row.engagementLabel || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: '#6b7280', fontSize: '12px', maxWidth: 180 }}>{row.notes || '—'}</td>
+                    <td style={{ padding: '9px 12px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button
+                        className="btn btn-primary"
+                        style={{ fontSize: '12px', padding: '4px 12px', background: '#16a34a', borderColor: '#16a34a' }}
+                        onClick={() => handleApproveSettlement(row)}
+                      >
+                        ✓ Approve & Set Amount
+                      </button>
+                      <button
+                        className="btn btn-danger"
+                        style={{ fontSize: '12px', padding: '4px 10px' }}
+                        onClick={() => handleRejectSettlement(row.id)}
+                      >
+                        ✕ Reject
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </article>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
         <div className="ops-card" style={{ padding: '1rem' }}>
@@ -949,7 +1195,7 @@ export default function TrainersSettlement({ user }) {
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>End Date</span><input className="form-control" type="date" value={cycleForm.refDate} onChange={(e) => setCycleForm((p) => ({ ...p, refDate: e.target.value }))} /></label>
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>Age (Days)</span><input className="form-control" type="number" min="0" value={cycleForm.ageDays} onChange={(e) => setCycleForm((p) => ({ ...p, ageDays: e.target.value }))} /></label>
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>Indicator</span><select className="form-control" value={cycleForm.indicator} onChange={(e) => setCycleForm((p) => ({ ...p, indicator: e.target.value }))}><option value="Within 30 days">Within 30 days</option><option value="Crossed 30 days">Crossed 30 days</option><option value="Crossed 45 days">Crossed 45 days</option></select></label>
-          <label><span className="muted" style={{ fontSize: '0.74rem' }}>Org Payment Status</span><select className="form-control" value={cycleForm.orgPaymentStatus} onChange={(e) => setCycleForm((p) => ({ ...p, orgPaymentStatus: e.target.value }))}>{agingOrgStatusOptions.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
+          <label><span className="muted" style={{ fontSize: '0.74rem' }}>Org Payment Status</span><select className="form-control" value={cycleForm.orgPaymentStatus} onChange={(e) => setCycleForm((p) => ({ ...p, orgPaymentStatus: e.target.value }))}>{orgPaymentStatusOptions.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>Trainer Settlement Status</span><select className="form-control" value={cycleForm.trainerSettlementStatus} onChange={(e) => setCycleForm((p) => ({ ...p, trainerSettlementStatus: e.target.value }))}>{agingTrainerStatusOptions.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>Paid from Company Pocket</span><input className="form-control" type="number" step="0.01" value={cycleForm.companyPocketPaid} onChange={(e) => setCycleForm((p) => ({ ...p, companyPocketPaid: e.target.value }))} /></label>
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>Yet to Recover</span><input className="form-control" type="number" step="0.01" value={cycleForm.yetToRecover} onChange={(e) => setCycleForm((p) => ({ ...p, yetToRecover: e.target.value }))} /></label>
@@ -976,8 +1222,8 @@ export default function TrainersSettlement({ user }) {
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>Trainer</span><select className="form-control" value={agingTrainerFilter} onChange={(e) => setAgingTrainerFilter(e.target.value)}><option value="">All Trainers</option>{trainerNames.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>College</span><select className="form-control" value={agingCollegeFilter} onChange={(e) => setAgingCollegeFilter(e.target.value)}><option value="">All Colleges</option>{agingCollegeOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>Organization (Edtect)</span><select className="form-control" value={agingOrganizationFilter} onChange={(e) => setAgingOrganizationFilter(e.target.value)}><option value="">All Organizations</option>{agingOrganizationOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
-          <label><span className="muted" style={{ fontSize: '0.74rem' }}>Org Payment Status</span><select className="form-control" value={agingOrgStatusFilter} onChange={(e) => setAgingOrgStatusFilter(e.target.value)}><option value="">All Org Status</option>{agingOrgStatusOptions.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
-          <label><span className="muted" style={{ fontSize: '0.74rem' }}>Trainer Settlement Status</span><select className="form-control" value={agingTrainerStatusFilter} onChange={(e) => setAgingTrainerStatusFilter(e.target.value)}><option value="">All Trainer Status</option>{agingTrainerStatusOptions.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
+          <label><span className="muted" style={{ fontSize: '0.74rem' }}>Org Payment Status</span><select className="form-control" value={agingOrgStatusFilter} onChange={(e) => setAgingOrgStatusFilter(e.target.value)}><option value="">All Org Status</option><option value={UNPAID_ORG_FILTER}>Unpaid (Org Not Paid)</option>{orgPaymentStatusOptions.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
+          <label><span className="muted" style={{ fontSize: '0.74rem' }}>Trainer Settlement Status</span><select className="form-control" value={agingTrainerStatusFilter} onChange={(e) => setAgingTrainerStatusFilter(e.target.value)}><option value="">All Trainer Status</option><option value={OPEN_SETTLEMENT_FILTER}>Open / Not Cleared</option>{agingTrainerStatusOptions.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>From Date</span><input className="form-control" type="date" value={agingFromDate} onChange={(e) => setAgingFromDate(e.target.value)} /></label>
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>To Date</span><input className="form-control" type="date" value={agingToDate} onChange={(e) => setAgingToDate(e.target.value)} /></label>
           <label><span className="muted" style={{ fontSize: '0.74rem' }}>Sort By</span><select className="form-control" value={agingSortBy} onChange={(e) => setAgingSortBy(e.target.value)}><option value="age">Days Crossed</option><option value="college">College</option><option value="end_date">End Date</option><option value="org_status">Org Payment Status</option><option value="trainer_status">Trainer Settlement Status</option></select></label>

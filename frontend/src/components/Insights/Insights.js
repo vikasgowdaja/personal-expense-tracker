@@ -1,10 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { expenseAPI, trainerSettlementAPI, trainingEngagementAPI } from '../../services/api';
+import InsightDetailPage from './InsightDetailPage';
 
 const DEFAULT_TDS_PERCENT = 10;
 
 function inr(value) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
+}
+
+function formatDate(value) {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toLocaleDateString('en-IN');
 }
 
 function parsePaymentStatus(description) {
@@ -130,6 +139,30 @@ function RecoveryBar({ recovered, total }) {
   );
 }
 
+function InsightSummaryCard({ accentClass = '', borderLeftColor, valueColor, value, label, helperText, onClick }) {
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onClick();
+    }
+  };
+
+  return (
+    <div
+      className={`ops-card summary-card teaching-stat-card ${accentClass}`.trim()}
+      style={{ borderLeftColor, cursor: 'pointer' }}
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={handleKeyDown}
+    >
+      <div className="stat-value" style={valueColor ? { color: valueColor } : undefined}>{value}</div>
+      <div className="stat-label">{label}</div>
+      <div className="muted" style={{ marginTop: 6, fontSize: '0.75rem' }}>{helperText || 'More info'}</div>
+    </div>
+  );
+}
+
 function isEngagementVisibleForUser(row, user) {
   if (!user) return true;
 
@@ -151,6 +184,8 @@ function isEngagementVisibleForUser(row, user) {
 }
 
 function Insights({ user }) {
+  const navigate = useNavigate();
+  const { detailKey } = useParams();
   const [financeRecords, setFinanceRecords] = useState([]);
   const [loadingFinance, setLoadingFinance] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -433,6 +468,48 @@ function Insights({ user }) {
       .sort((a, b) => (b.amount || 0) - (a.amount || 0));
   }, [financeRecords]);
 
+  const expenseRows = useMemo(() => {
+    return financeRecords
+      .map((row) => ({
+        id: row._id,
+        title: row.title || 'Expense Record',
+        category: row.category || 'Other',
+        entryType: row.entryType || 'expense',
+        scope: row.expenseScope || 'general',
+        paymentState: row.paymentState || 'paid',
+        taggedRecoveryState: parsePaymentStatus(row.description),
+        amount: Number(row.amount || 0),
+        outstandingAmount: Number(row.outstandingAmount || 0),
+        dueDate: row.dueDate,
+        date: row.date,
+        description: row.description || ''
+      }))
+      .sort((a, b) => (b.amount || 0) - (a.amount || 0));
+  }, [financeRecords]);
+
+  const pendingPocketRows = useMemo(() => {
+    return expenseRows.filter((row) => row.taggedRecoveryState === 'pending');
+  }, [expenseRows]);
+
+  const pendingSettlementDetailRows = useMemo(() => {
+    const engagementMap = new Map(engagements.map((row) => [row.id, row]));
+    return settlements
+      .filter((row) => (row.status || '').toLowerCase() !== 'paid')
+      .map((row) => {
+        const engagement = engagementMap.get(row.trainingRecordId) || {};
+        return {
+          id: row.id,
+          trainerName: engagement.trainerName || '—',
+          organization: engagement.organization || '—',
+          college: engagement.college || '—',
+          amount: Number(row.amount || 0),
+          status: row.status || 'Planned',
+          paidDate: row.paidDate || null
+        };
+      })
+      .sort((a, b) => (b.amount || 0) - (a.amount || 0));
+  }, [settlements, engagements]);
+
   if (loadingFinance) {
     return <div className="loading">Analyzing company financials...</div>;
   }
@@ -441,9 +518,7 @@ function Insights({ user }) {
     totalBilled,
     trainersPaid,
     pendingSettlementAmount,
-    pendingSettlementCount,
     pendingRecoveryFromPayers,
-    pendingRecoveryCount,
     totalRecovered,
     financePending,
     grossMargin,
@@ -463,6 +538,141 @@ function Insights({ user }) {
     receivableAfterDebtClearance,
     actualLeftAfterTotalExpenses
   } = profitEngine;
+
+  const derivedDetailPages = {
+    'actual-left': {
+      title: 'Actual Left After Total Expenses',
+      description: 'This formula compares expected engagement revenue against all currently loaded expense records from the database.',
+      summaryCards: [
+        { label: 'Expected Revenue', value: inr(expectedRevenueTotal), tone: 'blue' },
+        { label: 'Total Expenses', value: inr(totalExpenses), tone: 'red' },
+        { label: 'Actual Left', value: `${actualLeftAfterTotalExpenses >= 0 ? '+' : '−'} ${inr(Math.abs(actualLeftAfterTotalExpenses))}`, tone: actualLeftAfterTotalExpenses >= 0 ? 'green' : 'red' }
+      ],
+      actions: [
+        { label: 'Open Training Engagements', to: '/training-engagements' },
+        { label: 'Open Expenses', to: '/expenses' }
+      ],
+      sections: [
+        {
+          title: 'Largest Expense Records',
+          description: 'These entries are currently driving the total expense value in the formula.',
+          table: {
+            emptyMessage: 'No expense records found.',
+            columns: [
+              { key: 'title', label: 'Title' },
+              { key: 'entryType', label: 'Type', render: (_, row) => String(row.entryType).replace(/_/g, ' ') },
+              { key: 'paymentState', label: 'Payment State' },
+              { key: 'date', label: 'Date', render: (_, row) => formatDate(row.date) },
+              { key: 'amount', label: 'Amount', align: 'right', render: (_, row) => inr(row.amount) }
+            ],
+            rows: expenseRows.slice(0, 12)
+          }
+        }
+      ]
+    },
+    'debt-clearance': {
+      title: 'Total Debt To Clear',
+      description: 'This combines open trainer settlements, unrecovered company-pocket outflows, and debt or credit-card liabilities.',
+      summaryCards: [
+        { label: 'Pending Settlements', value: inr(pendingSettlementAmount), tone: 'amber' },
+        { label: 'Company Pocket', value: inr(financePending), tone: 'red' },
+        { label: 'Debt Register', value: inr(creditCardDebt), tone: 'red' },
+        { label: 'Total Debt To Clear', value: inr(totalDebtToClear), tone: 'amber' }
+      ],
+      actions: [
+        { label: 'Open Trainer Settlements', to: '/trainer-settlements?trainerStatus=open' },
+        { label: 'Open Liability Expenses', to: '/expenses?type=liability' }
+      ],
+      sections: [
+        {
+          title: 'Pending Trainer Settlement Records',
+          description: 'Uncleared trainer settlement rows feeding the debt total.',
+          table: {
+            emptyMessage: 'No pending settlement records found.',
+            columns: [
+              { key: 'trainerName', label: 'Trainer' },
+              { key: 'organization', label: 'Organization' },
+              { key: 'college', label: 'College' },
+              { key: 'status', label: 'Status' },
+              { key: 'amount', label: 'Amount', align: 'right', render: (_, row) => inr(row.amount) }
+            ],
+            rows: pendingSettlementDetailRows
+          }
+        },
+        {
+          title: 'Unrecovered Company-Pocket Records',
+          description: 'Expense rows still tagged as pending recovery from the payer side.',
+          table: {
+            emptyMessage: 'No unrecovered company-pocket records found.',
+            columns: [
+              { key: 'title', label: 'Title' },
+              { key: 'category', label: 'Category' },
+              { key: 'taggedRecoveryState', label: 'Recovery State' },
+              { key: 'amount', label: 'Amount', align: 'right', render: (_, row) => inr(row.amount) }
+            ],
+            rows: pendingPocketRows
+          }
+        },
+        {
+          title: 'Debt Register Records',
+          description: 'Credit-card and debt rows counted in the liability bucket.',
+          table: {
+            emptyMessage: 'No debt records found.',
+            columns: [
+              { key: 'title', label: 'Title' },
+              { key: 'entryType', label: 'Type', render: (_, row) => String(row.entryType).replace(/_/g, ' ') },
+              { key: 'paymentState', label: 'Payment State' },
+              { key: 'amount', label: 'Amount', align: 'right', render: (_, row) => inr(row.amount) },
+              { key: 'outstandingAmount', label: 'Outstanding', align: 'right', render: (_, row) => inr(row.outstandingAmount) }
+            ],
+            rows: debtRegisterRows
+          }
+        }
+      ]
+    },
+    'ultimate-in-hand': {
+      title: 'Ultimate In-Hand After Clearance',
+      description: 'This is the final projected in-hand amount after trainer payouts and all debt-clearance buckets are resolved.',
+      summaryCards: [
+        { label: 'Expected Revenue', value: inr(expectedRevenueTotal), tone: 'blue' },
+        { label: 'Paid To Trainers', value: inr(trainersPaid), tone: 'blue' },
+        { label: 'Debt To Clear', value: inr(totalDebtToClear), tone: 'amber' },
+        { label: 'Ultimate In-Hand', value: `${ultimateInHandAfterDebtClearance >= 0 ? '+' : '−'} ${inr(Math.abs(ultimateInHandAfterDebtClearance))}`, tone: ultimateInHandAfterDebtClearance >= 0 ? 'green' : 'red' },
+        { label: 'Net Receivable After Clearance', value: `${receivableAfterDebtClearance >= 0 ? '+' : '−'} ${inr(Math.abs(receivableAfterDebtClearance))}`, tone: receivableAfterDebtClearance >= 0 ? 'green' : 'red' }
+      ],
+      actions: [
+        { label: 'Open Pending Recovery', to: '/training-engagements?status=unpaid' },
+        { label: 'Open Debt Clearance Detail', to: '/insights/debt-clearance' }
+      ],
+      sections: [
+        {
+          title: 'Formula Inputs',
+          description: 'These are the exact buckets used in the final projection.',
+          summaryCards: [
+            { label: 'Pending Recovery From Payers', value: inr(pendingRecoveryFromPayers), tone: 'red' },
+            { label: 'Pending Settlement To Trainers', value: inr(pendingSettlementAmount), tone: 'amber' },
+            { label: 'Paid From Company Pocket', value: inr(financePending), tone: 'red' },
+            { label: 'Credit Card / Debt', value: inr(creditCardDebt), tone: 'red' }
+          ]
+        }
+      ]
+    }
+  };
+
+  if (detailKey) {
+    const detailPage = derivedDetailPages[detailKey];
+    if (!detailPage) {
+      return (
+        <InsightDetailPage
+          title="Insight Detail Not Found"
+          description="This insight page is not available. Use the insights overview to open a valid detail page."
+          actions={[{ label: 'Back To Insights', to: '/insights' }]}
+        />
+      );
+    }
+
+    return <InsightDetailPage {...detailPage} />;
+  }
   return (
     <section className="ops-page">
       <div className="ops-page-header">
@@ -547,44 +757,65 @@ function Insights({ user }) {
 
       {/* ── Company P&L Summary Cards ── */}
       <div className="summary-cards dashboard-summary-grid" style={{ marginTop: 20 }}>
-        <div className={`ops-card summary-card teaching-stat-card ${totalBilled > 0 ? 'accent-green' : ''}`}>
-          <div className="stat-value">{inr(totalBilled)}</div>
-          <div className="stat-label">Total Billed to Client Orgs</div>
-        </div>
-        <div className="ops-card summary-card teaching-stat-card accent-blue">
-          <div className="stat-value">{inr(trainersPaid)}</div>
-          <div className="stat-label">Paid Out to Trainers</div>
-        </div>
-        <div className={`ops-card summary-card teaching-stat-card ${grossMargin >= 0 ? 'accent-green' : 'accent-red'}`}>
-          <div className="stat-value" style={{ color: grossMargin >= 0 ? '#16a34a' : '#dc2626' }}>
-            {grossMargin >= 0 ? '+' : ''}{inr(grossMargin)}
-          </div>
-          <div className="stat-label">Gross Margin</div>
-        </div>
+        <InsightSummaryCard
+          accentClass={totalBilled > 0 ? 'accent-green' : ''}
+          value={inr(totalBilled)}
+          label="Total Billed to Client Orgs"
+          helperText="Open training engagements"
+          onClick={() => navigate('/training-engagements')}
+        />
+        <InsightSummaryCard
+          accentClass="accent-blue"
+          value={inr(trainersPaid)}
+          label="Paid Out to Trainers"
+          helperText="Open trainer settlements"
+          onClick={() => navigate('/trainer-settlements')}
+        />
+        <InsightSummaryCard
+          accentClass={grossMargin >= 0 ? 'accent-green' : 'accent-red'}
+          value={`${grossMargin >= 0 ? '+' : ''}${inr(grossMargin)}`}
+          valueColor={grossMargin >= 0 ? '#16a34a' : '#dc2626'}
+          label="Gross Margin"
+          helperText="Open financial reports"
+          onClick={() => navigate('/financial-reports')}
+        />
       </div>
 
       {/* ── Recovery / Settlement / Exposure Cards ── */}
       <div className="summary-cards dashboard-summary-grid" style={{ marginTop: 14 }}>
-        <div className="ops-card summary-card teaching-stat-card received" style={{ borderLeftColor: '#16a34a' }}>
-          <div className="stat-value" style={{ color: '#16a34a' }}>{inr(totalRecovered)}</div>
-          <div className="stat-label">Recovered from Client Orgs</div>
-          <div className="muted" style={{ marginTop: 6, fontSize: '0.75rem' }}>Cash already received</div>
-        </div>
-        <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#dc2626' }}>
-          <div className="stat-value" style={{ color: '#dc2626' }}>{inr(pendingRecoveryFromPayers)}</div>
-          <div className="stat-label">Pending Recovery from Payers</div>
-          <div className="muted" style={{ marginTop: 6, fontSize: '0.75rem' }}>{pendingRecoveryCount} engagement(s) still unpaid</div>
-        </div>
-        <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#d97706' }}>
-          <div className="stat-value" style={{ color: '#d97706' }}>{inr(pendingSettlementAmount)}</div>
-          <div className="stat-label">Pending Settlement to Trainers</div>
-          <div className="muted" style={{ marginTop: 6, fontSize: '0.75rem' }}>{pendingSettlementCount} settlement record(s) not cleared</div>
-        </div>
-        <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#dc2626' }}>
-          <div className="stat-value" style={{ color: '#dc2626' }}>{inr(financePending)}</div>
-          <div className="stat-label">Paid from Company Pocket (Unrecovered)</div>
-          <div className="muted" style={{ marginTop: 6, fontSize: '0.75rem' }}>Advance already gone from company cash</div>
-        </div>
+        <InsightSummaryCard
+          accentClass="received"
+          borderLeftColor="#16a34a"
+          valueColor="#16a34a"
+          value={inr(totalRecovered)}
+          label="Recovered from Client Orgs"
+          helperText="Open paid engagements"
+          onClick={() => navigate('/training-engagements?status=Paid')}
+        />
+        <InsightSummaryCard
+          borderLeftColor="#dc2626"
+          valueColor="#dc2626"
+          value={inr(pendingRecoveryFromPayers)}
+          label="Pending Recovery from Payers"
+          helperText="Open unpaid engagements"
+          onClick={() => navigate('/training-engagements?status=unpaid')}
+        />
+        <InsightSummaryCard
+          borderLeftColor="#d97706"
+          valueColor="#d97706"
+          value={inr(pendingSettlementAmount)}
+          label="Pending Settlement to Trainers"
+          helperText="Open uncleared settlements"
+          onClick={() => navigate('/trainer-settlements?trainerStatus=open')}
+        />
+        <InsightSummaryCard
+          borderLeftColor="#dc2626"
+          valueColor="#dc2626"
+          value={inr(financePending)}
+          label="Paid from Company Pocket (Unrecovered)"
+          helperText="Open unrecovered expense records"
+          onClick={() => navigate('/expenses?insight=unrecovered-pocket')}
+        />
       </div>
 
       {/* ── Recovery Progress Bar ── */}
@@ -609,34 +840,52 @@ function Insights({ user }) {
           pending settlements, unrecovered pocket expenses, and credit-card/debt expenses.
         </p>
         <div className="summary-cards dashboard-summary-grid">
-          <div className="ops-card summary-card teaching-stat-card accent-blue">
-            <div className="stat-value">{inr(expectedRevenueTotal)}</div>
-            <div className="stat-label">Expected Revenue (Full Collection)</div>
-          </div>
-          <div className="ops-card summary-card teaching-stat-card">
-            <div className="stat-value" style={{ color: '#b91c1c' }}>{inr(totalExpenses)}</div>
-            <div className="stat-label">Total Expenses (From Expenses Page)</div>
-          </div>
-          <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: actualLeftAfterTotalExpenses >= 0 ? '#16a34a' : '#dc2626' }}>
-            <div className="stat-value" style={{ color: actualLeftAfterTotalExpenses >= 0 ? '#16a34a' : '#dc2626' }}>
-              {actualLeftAfterTotalExpenses >= 0 ? '+' : '−'} {inr(Math.abs(actualLeftAfterTotalExpenses))}
-            </div>
-            <div className="stat-label">Actual Left (Expected Revenue − Total Expenses)</div>
-          </div>
-          <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#dc2626' }}>
-            <div className="stat-value" style={{ color: '#dc2626' }}>{inr(creditCardDebt)}</div>
-            <div className="stat-label">Credit Card / Debt Expenses</div>
-          </div>
-          <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#d97706' }}>
-            <div className="stat-value" style={{ color: '#d97706' }}>{inr(totalDebtToClear)}</div>
-            <div className="stat-label">Total Debt to Clear</div>
-          </div>
-          <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: ultimateInHandAfterDebtClearance >= 0 ? '#16a34a' : '#dc2626' }}>
-            <div className="stat-value" style={{ color: ultimateInHandAfterDebtClearance >= 0 ? '#16a34a' : '#dc2626' }}>
-              {ultimateInHandAfterDebtClearance >= 0 ? '+' : '−'} {inr(Math.abs(ultimateInHandAfterDebtClearance))}
-            </div>
-            <div className="stat-label">Ultimate In-Hand After Clearance</div>
-          </div>
+          <InsightSummaryCard
+            accentClass="accent-blue"
+            value={inr(expectedRevenueTotal)}
+            label="Expected Revenue (Full Collection)"
+            helperText="Open training engagements"
+            onClick={() => navigate('/training-engagements')}
+          />
+          <InsightSummaryCard
+            value={inr(totalExpenses)}
+            valueColor="#b91c1c"
+            label="Total Expenses (From Expenses Page)"
+            helperText="Open expenses"
+            onClick={() => navigate('/expenses')}
+          />
+          <InsightSummaryCard
+            borderLeftColor={actualLeftAfterTotalExpenses >= 0 ? '#16a34a' : '#dc2626'}
+            valueColor={actualLeftAfterTotalExpenses >= 0 ? '#16a34a' : '#dc2626'}
+            value={`${actualLeftAfterTotalExpenses >= 0 ? '+' : '−'} ${inr(Math.abs(actualLeftAfterTotalExpenses))}`}
+            label="Actual Left (Expected Revenue − Total Expenses)"
+            helperText="Open formula detail"
+            onClick={() => navigate('/insights/actual-left')}
+          />
+          <InsightSummaryCard
+            borderLeftColor="#dc2626"
+            valueColor="#dc2626"
+            value={inr(creditCardDebt)}
+            label="Credit Card / Debt Expenses"
+            helperText="Open liability expenses"
+            onClick={() => navigate('/expenses?type=liability')}
+          />
+          <InsightSummaryCard
+            borderLeftColor="#d97706"
+            valueColor="#d97706"
+            value={inr(totalDebtToClear)}
+            label="Total Debt to Clear"
+            helperText="Open formula detail"
+            onClick={() => navigate('/insights/debt-clearance')}
+          />
+          <InsightSummaryCard
+            borderLeftColor={ultimateInHandAfterDebtClearance >= 0 ? '#16a34a' : '#dc2626'}
+            valueColor={ultimateInHandAfterDebtClearance >= 0 ? '#16a34a' : '#dc2626'}
+            value={`${ultimateInHandAfterDebtClearance >= 0 ? '+' : '−'} ${inr(Math.abs(ultimateInHandAfterDebtClearance))}`}
+            label="Ultimate In-Hand After Clearance"
+            helperText="Open formula detail"
+            onClick={() => navigate('/insights/ultimate-in-hand')}
+          />
         </div>
         <div style={{ marginTop: 12, fontSize: '0.82rem', color: '#334155' }}>
           <strong>Net receivable after debt clearance (from unpaid orgs):</strong> {receivableAfterDebtClearance >= 0 ? '+' : '−'} {inr(Math.abs(receivableAfterDebtClearance))}

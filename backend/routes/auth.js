@@ -364,6 +364,10 @@ router.put(
       if (req.body.name !== undefined) user.name = req.body.name.trim();
       if (req.body.mobile !== undefined) user.mobile = String(req.body.mobile || '').trim();
       if (req.body.profilePhoto !== undefined) user.profilePhoto = String(req.body.profilePhoto || '').trim();
+      if (req.body.annualEngagementTarget !== undefined) {
+        const t = parseInt(req.body.annualEngagementTarget, 10);
+        if (!isNaN(t) && t >= 1) user.annualEngagementTarget = t;
+      }
 
       await user.save();
 

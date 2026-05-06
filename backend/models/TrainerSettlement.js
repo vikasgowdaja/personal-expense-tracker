@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const SETTLEMENT_STATUS = ['Planned', 'Partially Paid', 'Paid'];
+const SETTLEMENT_STATUS = ['Pending Approval', 'Approved', 'Planned', 'Partially Paid', 'Paid'];
 
 const trainerSettlementSchema = new mongoose.Schema(
   {

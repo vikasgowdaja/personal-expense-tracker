@@ -40,6 +40,91 @@ const DEF_SESSIONS = [
   {date:'08-Mar-2026 (Sun)',hours:2,rate:1400},
 ];
 
+const INVOICE_TEMPLATES = [
+  {
+    id: 'trans-neuron-azure-devops',
+    name: 'Trans Neuron - Azure DevOps (Standard)',
+    form: {
+      invoiceNo: 'VIKAS/2026-27/01',
+      poNo: 'TNTPL/2026-27/04',
+      billedToName: 'Trans Neuron Technologies Pvt. Ltd.',
+      billedToAddress: 'Municipal No. 420, P/D No. 68-6-420\nIndiQube Assort, IV Block, 100 Feet Road,\nKoramangala, Bengaluru',
+      billedToWebsite: 'www.transneuron.com',
+      courseName: 'Azure DevOps',
+      trainingPeriod: '6th March 2026 to 9th May 2026',
+      mode: 'Offline',
+      totalSessions: '23 Sessions x 2 hrs = 46 Hours'
+    },
+    sessions: [...DEF_SESSIONS]
+  },
+  {
+    id: 'seminarroom-gokak-frontend',
+    name: 'Seminarroom - Gokak Frontend Batch',
+    form: {
+      invoiceNo: 'VIKAS/2026-27/SG-01',
+      poNo: 'SR/PO/2026/118',
+      billedToName: 'Seminarroom Education Pvt. Ltd.',
+      billedToAddress: 'No. 284, 2nd Floor, 27th Main\nHSR Layout Sector 1, Bengaluru - 560102',
+      billedToWebsite: 'www.seminarroom.co',
+      courseName: 'Frontend Development',
+      trainingPeriod: '14th Jan 2026 to 14th Feb 2026',
+      mode: 'Hybrid',
+      totalSessions: '14 Sessions x 2 hrs = 28 Hours'
+    },
+    sessions: [
+      { date: '14-Jan-2026 (Wed)', hours: 2, rate: 1500 },
+      { date: '17-Jan-2026 (Sat)', hours: 2, rate: 1500 },
+      { date: '24-Jan-2026 (Sat)', hours: 2, rate: 1500 },
+      { date: '31-Jan-2026 (Sat)', hours: 2, rate: 1500 },
+      { date: '07-Feb-2026 (Sat)', hours: 2, rate: 1500 },
+      { date: '14-Feb-2026 (Sat)', hours: 2, rate: 1500 }
+    ]
+  },
+  {
+    id: 'seminarroom-hubballi-dm',
+    name: 'Seminarroom - Hubballi Digital Marketing',
+    form: {
+      invoiceNo: 'VIKAS/2026-27/SH-02',
+      poNo: 'SR/PO/2026/146',
+      billedToName: 'Seminarroom Education Pvt. Ltd.',
+      billedToAddress: 'No. 284, 2nd Floor, 27th Main\nHSR Layout Sector 1, Bengaluru - 560102',
+      billedToWebsite: 'www.seminarroom.co',
+      courseName: 'Digital Marketing',
+      trainingPeriod: '15th Jan 2026 to 15th Feb 2026',
+      mode: 'Offline',
+      totalSessions: '10 Sessions x 2 hrs = 20 Hours'
+    },
+    sessions: [
+      { date: '15-Jan-2026 (Thu)', hours: 2, rate: 1400 },
+      { date: '22-Jan-2026 (Thu)', hours: 2, rate: 1400 },
+      { date: '29-Jan-2026 (Thu)', hours: 2, rate: 1400 },
+      { date: '05-Feb-2026 (Thu)', hours: 2, rate: 1400 },
+      { date: '12-Feb-2026 (Thu)', hours: 2, rate: 1400 }
+    ]
+  },
+  {
+    id: 'atom-rnsit-aws-cloud',
+    name: 'Atom - RNSIT AWS Cloud Track',
+    form: {
+      invoiceNo: 'VIKAS/2026-27/AT-03',
+      poNo: 'ATOM/2026/TR/078',
+      billedToName: 'Atom',
+      billedToAddress: '6th Floor, IT Park Block, Bannerghatta Road\nBengaluru - 560076',
+      billedToWebsite: 'www.atomlearning.in',
+      courseName: 'AWS Cloud',
+      trainingPeriod: '10th Feb 2026 to 17th Feb 2026',
+      mode: 'Online',
+      totalSessions: '8 Sessions x 2 hrs = 16 Hours'
+    },
+    sessions: [
+      { date: '10-Feb-2026 (Tue)', hours: 2, rate: 1600 },
+      { date: '11-Feb-2026 (Wed)', hours: 2, rate: 1600 },
+      { date: '13-Feb-2026 (Fri)', hours: 2, rate: 1600 },
+      { date: '17-Feb-2026 (Tue)', hours: 2, rate: 1600 }
+    ]
+  }
+];
+
 const FIELD_MAP_OPTIONS = [
   {value:'',label:'-- Skip --'},{value:'trainerName',label:'Trainer Name'},
   {value:'trainerTitle',label:'Designation'},{value:'pan',label:'PAN'},
@@ -179,10 +264,16 @@ function ModalContent({ id, form, setForm, sessions, setSessions, onClose,
   );
 
   if (id === 'invoice') return (
-    <div className="inv-modal-grid">
-      <F label="Invoice No." name="invoiceNo" value={form.invoiceNo} onChange={hf} />
-      <F label="Invoice Date" name="invoiceDate" value={form.invoiceDate} onChange={hf} />
-      <F label="PO No. (optional)" name="poNo" value={form.poNo} onChange={hf} />
+    <div>
+      <div style={{ marginBottom: '0.9rem', border: '1px solid #dbe2ff', background: '#f8faff', borderRadius: '10px', padding: '0.7rem' }}>
+        <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#4338ca', marginBottom: '0.45rem' }}>Quick Templates</div>
+        <TemplatePicker form={form} setForm={setForm} setSessions={setSessions} />
+      </div>
+      <div className="inv-modal-grid">
+        <F label="Invoice No." name="invoiceNo" value={form.invoiceNo} onChange={hf} />
+        <F label="Invoice Date" name="invoiceDate" value={form.invoiceDate} onChange={hf} />
+        <F label="PO No. (optional)" name="poNo" value={form.poNo} onChange={hf} />
+      </div>
     </div>
   );
 
@@ -243,6 +334,45 @@ function ModalContent({ id, form, setForm, sessions, setSessions, onClose,
   );
 
   return null;
+}
+
+function TemplatePicker({ form, setForm, setSessions }) {
+  const [templateId, setTemplateId] = useState('');
+
+  const applyTemplate = () => {
+    const selected = INVOICE_TEMPLATES.find((tpl) => tpl.id === templateId);
+    if (!selected) {
+      alert('Please select a template first.');
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      ...selected.form,
+      invoiceDate: prev.invoiceDate || DEFAULTS.invoiceDate
+    }));
+    setSessions(Array.isArray(selected.sessions) && selected.sessions.length ? selected.sessions : [...DEF_SESSIONS]);
+    alert(`Applied template: ${selected.name}`);
+  };
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem' }}>
+      <select className="form-control" value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
+        <option value="">Select invoice template</option>
+        {INVOICE_TEMPLATES.map((tpl) => (
+          <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+        ))}
+      </select>
+      <button
+        type="button"
+        className="inv-action-btn inv-action-btn-print"
+        style={{ width: 'auto', padding: '0.45rem 0.9rem', fontSize: '0.75rem' }}
+        onClick={applyTemplate}
+      >
+        Apply
+      </button>
+    </div>
+  );
 }
 
 /* ══════════════════════════════════════════

@@ -177,6 +177,16 @@ router.put('/:id', [
     return res.status(403).json({ message: 'Role changes are allowed only for Platform Owner via role endpoint.' });
   }
 
+  // Platform owner or superadmin can set annual targets for employees
+  if (req.body.annualEngagementTarget !== undefined) {
+    const t = parseInt(req.body.annualEngagementTarget, 10);
+    if (!isNaN(t) && t >= 1) updates.annualEngagementTarget = t;
+  }
+  if (req.body.annualRevenueTarget !== undefined) {
+    const r = Number(req.body.annualRevenueTarget);
+    if (!isNaN(r) && r >= 0) updates.annualRevenueTarget = r;
+  }
+
   try {
     if (req.user.role === 'superadmin') {
       const managed = await User.findOne({

@@ -16,6 +16,7 @@
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .am-close-btn {
@@ -68,6 +69,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .am-nav-header {
@@ -96,6 +98,12 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 8px;
+  padding-bottom: 24px;
 }
 
 .am-nav-item {
@@ -137,14 +145,12 @@
 }
 
 .am-drag-hint {
-  position: absolute;
-  bottom: 32px;
-  left: 32px;
-  right: 32px;
+  margin-top: 24px;
   padding: 16px;
   border-radius: 8px;
   background-color: #f3f4f6;
   text-align: left;
+  flex-shrink: 0;
 }
 
 .am-drag-hint p {

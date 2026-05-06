@@ -7,6 +7,7 @@ import Insights from '../Insights/Insights';
 import './Dashboard.css';
 
 const DEFAULT_TDS_PERCENT = 10;
+const UNPAID_ORG_FILTER = '__unpaid__';
 
 function inr(value) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
@@ -493,7 +494,8 @@ function Dashboard({ user }) {
       if (cycleTrainerFilter && row.trainerName !== cycleTrainerFilter) return false;
       if (cycleCollegeFilter && row.college !== cycleCollegeFilter) return false;
       if (cycleOrgFilter && row.organization !== cycleOrgFilter) return false;
-      if (cycleOrgStatusFilter && row.orgCycleStatus !== cycleOrgStatusFilter) return false;
+      if (cycleOrgStatusFilter === UNPAID_ORG_FILTER && row.orgCycleStatus === 'Paid') return false;
+      if (cycleOrgStatusFilter && cycleOrgStatusFilter !== UNPAID_ORG_FILTER && row.orgCycleStatus !== cycleOrgStatusFilter) return false;
       if (cycleSettlementStatusFilter && row.trainerSettlementStatus !== cycleSettlementStatusFilter) return false;
       if (cycleFromDate && row.endDate && new Date(row.endDate) < new Date(cycleFromDate)) return false;
       if (cycleToDate && row.endDate && new Date(row.endDate) > new Date(cycleToDate)) return false;
@@ -615,14 +617,14 @@ function Dashboard({ user }) {
         )}
         <div className="ops-card summary-card teaching-stat-card" style={{ borderLeftColor: '#dc2626', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
           role="button" tabIndex={0} title="View Insights – Pending Recovery"
-          onClick={() => navigate('/insights')}
-          onKeyDown={e => e.key === 'Enter' && navigate('/insights')}
+          onClick={() => navigate('/training-engagements?status=unpaid')}
+          onKeyDown={e => e.key === 'Enter' && navigate('/training-engagements?status=unpaid')}
           onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,0.12)'; }}
           onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow=''; }}>
           <div className="stat-value" style={{ color: '#dc2626' }}>{inr(analytics.pendingRecoveryFromPayers)}</div>
           <div className="stat-label">Pending Recovery from Payers</div>
-          <div className="muted" style={{ marginTop: 6, fontSize: '0.75rem' }}>{analytics.pendingRecoveryCount} engagement(s) unpaid</div>
-          <div style={{ fontSize: '0.7rem', color: '#dc2626', marginTop: 4, fontWeight: 600 }}>→ Insights</div>
+          <div className="muted" style={{ marginTop: 6, fontSize: '0.75rem' }}>Open unpaid engagements</div>
+          <div style={{ fontSize: '0.7rem', color: '#dc2626', marginTop: 4, fontWeight: 600 }}>→ Training Engagements</div>
         </div>
         {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
           <div className="ops-card summary-card teaching-stat-card accent-green" role="button" tabIndex={0}
@@ -773,6 +775,7 @@ function Dashboard({ user }) {
 
           <select className="form-control" value={cycleOrgStatusFilter} onChange={(e) => setCycleOrgStatusFilter(e.target.value)}>
             <option value="">All Org Status</option>
+            <option value={UNPAID_ORG_FILTER}>Unpaid (Org Not Paid)</option>
             <option value="Paid">Paid</option>
             <option value="Not Matured">Not Matured</option>
             <option value="Recovery Due">Recovery Due</option>

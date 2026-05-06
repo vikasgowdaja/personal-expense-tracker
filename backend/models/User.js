@@ -93,6 +93,17 @@ const userSchema = new mongoose.Schema({
     trim: true,
     default: ''
   },
+  annualEngagementTarget: {
+    type: Number,
+    default: 20,
+    min: 1
+  },
+  // Revenue target (in INR) set by platform_owner / superadmin per employee
+  annualRevenueTarget: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   createdAt: {
     type: Date,
     default: Date.now

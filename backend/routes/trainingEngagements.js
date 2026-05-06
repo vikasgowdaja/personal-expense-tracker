@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { body, validationResult } = require('express-validator');
 const auth = require('../middleware/auth');
 const TrainingEngagement = require('../models/TrainingEngagement');
@@ -45,24 +46,88 @@ async function buildEngagementScope(userDoc) {
     };
   }
 
-  const activeConnections = (userDoc.connections || []).filter((c) => c.isActive !== false);
-  const pairClauses = activeConnections.map((c) => ({
-    ownerSuperadminId: c.superadminId,
-    connectionId: c.connectionId
-  }));
+  const sourceKey = String(userDoc.employeeId || userDoc.name || '').trim();
+  if (!sourceKey) {
+    return { _id: null };
+  }
 
-  return {
-    $or: [
-      { sourcedByUserId: userDoc._id },
-      { user: userDoc._id },
-      ...pairClauses
-    ]
-  };
+  return { sourcedBy: sourceKey };
+}
+
+async function resolveAssignedUser({ sourcedBy, sourcedByName, fallbackUserId = null }) {
+  const normalizedSourcedBy = String(sourcedBy || '').trim();
+  const normalizedSourcedByName = String(sourcedByName || '').trim();
+
+  const candidateFilters = [];
+  if (normalizedSourcedBy) {
+    candidateFilters.push({ employeeId: normalizedSourcedBy });
+    if (mongoose.Types.ObjectId.isValid(normalizedSourcedBy)) {
+      candidateFilters.push({ _id: normalizedSourcedBy });
+    }
+    candidateFilters.push({ name: normalizedSourcedBy });
+  }
+  if (normalizedSourcedByName) {
+    candidateFilters.push({ name: normalizedSourcedByName });
+  }
+
+  if (candidateFilters.length > 0) {
+    const candidates = await User.find({ $or: candidateFilters })
+      .select('_id employeeId name role')
+      .lean();
+
+    const byEmployeeId = candidates.find((user) => normalizedSourcedBy && user.employeeId === normalizedSourcedBy);
+    if (byEmployeeId) return byEmployeeId;
+
+    const byObjectId = candidates.find((user) => normalizedSourcedBy && String(user._id) === normalizedSourcedBy);
+    if (byObjectId) return byObjectId;
+
+    const byNamedEmployee = candidates.find((user) => normalizedSourcedByName && user.role === 'employee' && user.name === normalizedSourcedByName);
+    if (byNamedEmployee) return byNamedEmployee;
+
+    const byName = candidates.find((user) => normalizedSourcedByName && user.name === normalizedSourcedByName)
+      || candidates.find((user) => normalizedSourcedBy && user.name === normalizedSourcedBy);
+    if (byName) return byName;
+  }
+
+  if (!fallbackUserId) {
+    return null;
+  }
+
+  return User.findById(fallbackUserId)
+    .select('_id employeeId name role')
+    .lean();
 }
 
 function mergeScopeAndFilters(scope, filters) {
   if (!filters || Object.keys(filters).length === 0) return scope;
   return { $and: [scope, filters] };
+}
+
+function sanitizeEngagementForEmployee(row) {
+  if (!row) return row;
+
+  const plain = typeof row.toObject === 'function' ? row.toObject() : { ...row };
+
+  // Expose gross revenue contribution (what this engagement is worth) so the
+  // employee can track their annual revenue progress — but hide cost-breakdown
+  // details (TDS, net payable, per-trainer rates) which are internal finance data.
+  plain.contributionAmount = Number(plain.grossAmount || 0);
+
+  delete plain.grossAmount;
+  delete plain.totalAmount;
+  delete plain.tdsAmount;
+  delete plain.tdsPercent;
+  delete plain.tdsApplicable;
+
+  if (Array.isArray(plain.trainers)) {
+    plain.trainers = plain.trainers.map((trainer) => ({
+      ...trainer,
+      dailyRate: undefined,
+      amount: undefined
+    }));
+  }
+
+  return plain;
 }
 
 async function syncOrgPaymentReceived(engagementId) {
@@ -127,7 +192,7 @@ router.get('/', auth, async (req, res) => {
       .populate('trainers.trainerId', 'fullName email phone specialization yearsOfExperience')
       .sort({ startDate: -1, createdAt: -1 });
 
-    res.json(rows);
+    res.json(userDoc.role === 'employee' ? rows.map(sanitizeEngagementForEmployee) : rows);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server error');
@@ -154,7 +219,7 @@ router.get('/:id', auth, async (req, res) => {
       return res.status(404).json({ message: 'Training engagement not found' });
     }
 
-    res.json(row);
+    res.json(userDoc.role === 'employee' ? sanitizeEngagementForEmployee(row) : row);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server error');
@@ -268,11 +333,20 @@ router.post(
         connectionId = `SA-${String(req.user.id).slice(-6).toUpperCase()}`;
       }
 
+      const assignedUser = await resolveAssignedUser({
+        sourcedBy: req.body.sourcedBy,
+        sourcedByName: req.body.sourcedByName,
+        fallbackUserId: req.user.id
+      });
+
+      const normalizedSourcedBy = assignedUser?.employeeId || req.body.sourcedBy || assignedUser?.name || '';
+      const normalizedSourcedByName = req.body.sourcedByName || assignedUser?.name || '';
+
       const row = new TrainingEngagement({
         user: req.user.id,
         ownerSuperadminId,
         connectionId,
-        sourcedByUserId: req.user.id,
+        sourcedByUserId: assignedUser?._id || req.user.id,
         institutionId: req.body.institutionId,
         clientId: req.body.clientId,
         engagementTitle: req.body.engagementTitle || '',
@@ -295,8 +369,8 @@ router.post(
           ? (req.body.orgPaymentReceivedAt ? new Date(req.body.orgPaymentReceivedAt) : new Date())
           : null,
         notes: req.body.notes || '',
-        sourcedBy: req.body.sourcedBy || '',
-        sourcedByName: req.body.sourcedByName || ''
+        sourcedBy: normalizedSourcedBy,
+        sourcedByName: normalizedSourcedByName
       });
 
       const saved = await row.save();
@@ -342,6 +416,19 @@ router.put('/:id', auth, async (req, res) => {
         row[field] = req.body[field];
       }
     });
+
+    if (req.body.sourcedBy !== undefined || req.body.sourcedByName !== undefined) {
+      const assignedUser = await resolveAssignedUser({
+        sourcedBy: req.body.sourcedBy !== undefined ? req.body.sourcedBy : row.sourcedBy,
+        sourcedByName: req.body.sourcedByName !== undefined ? req.body.sourcedByName : row.sourcedByName,
+        fallbackUserId: row.sourcedByUserId || req.user.id
+      });
+
+      row.sourcedBy = assignedUser?.employeeId || req.body.sourcedBy || assignedUser?.name || row.sourcedBy || '';
+      row.sourcedByName = req.body.sourcedByName || assignedUser?.name || row.sourcedByName || '';
+
+      row.sourcedByUserId = assignedUser?._id || null;
+    }
 
     // Maintain strict tenancy boundaries.
     if (req.body.connectionId !== undefined || req.body.ownerSuperadminId !== undefined) {

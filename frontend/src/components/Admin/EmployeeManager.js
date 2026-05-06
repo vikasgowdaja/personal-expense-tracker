@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { employeeAPI } from '../../services/api';
 
-const emptyForm = { name: '', email: '', password: '', connectionId: '' };
+const emptyForm = { name: '', email: '', password: '', connectionId: '', annualEngagementTarget: '', annualRevenueTarget: '' };
 
 function RoleBadge({ role }) {
   if (role === 'platform_owner') {
@@ -66,7 +66,16 @@ function EmployeeManager() {
     setLoading(true);
     try {
       if (editId) {
-        await employeeAPI.update(editId, { name: form.name });
+        const updatePayload = { name: form.name };
+        if (form.annualEngagementTarget !== '') {
+          const t = parseInt(form.annualEngagementTarget, 10);
+          if (!isNaN(t) && t >= 1) updatePayload.annualEngagementTarget = t;
+        }
+        if (form.annualRevenueTarget !== '') {
+          const r = Number(form.annualRevenueTarget);
+          if (!isNaN(r) && r >= 0) updatePayload.annualRevenueTarget = r;
+        }
+        await employeeAPI.update(editId, updatePayload);
         setInfo('Account updated.');
       } else {
         const res = await employeeAPI.create(form);
@@ -107,7 +116,13 @@ function EmployeeManager() {
   }
 
   function startEdit(u) {
-    setForm({ name: u.name, email: u.email, password: '' });
+    setForm({
+      name: u.name,
+      email: u.email,
+      password: '',
+      annualEngagementTarget: u.annualEngagementTarget != null ? String(u.annualEngagementTarget) : '',
+      annualRevenueTarget: u.annualRevenueTarget != null ? String(u.annualRevenueTarget) : ''
+    });
     setEditId(u._id);
     setShowForm(true);
     setError('');
@@ -156,6 +171,34 @@ function EmployeeManager() {
                 required
               />
             </div>
+            {editId && (
+              <>
+                <div className="form-group">
+                  <label>Annual Engagement Target</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={form.annualEngagementTarget}
+                    onChange={e => setForm({ ...form, annualEngagementTarget: e.target.value })}
+                    placeholder="e.g. 20"
+                    min="1"
+                  />
+                  <small style={{ color: '#6b7280', fontSize: '11px' }}>Number of engagements employee should deliver per year</small>
+                </div>
+                <div className="form-group">
+                  <label>Annual Revenue Target (₹)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={form.annualRevenueTarget}
+                    onChange={e => setForm({ ...form, annualRevenueTarget: e.target.value })}
+                    placeholder="e.g. 1000000"
+                    min="0"
+                  />
+                  <small style={{ color: '#6b7280', fontSize: '11px' }}>Revenue this employee is expected to bring in for the year</small>
+                </div>
+              </>
+            )}
             {!editId && (
               <>
                 <div className="form-group">
@@ -233,7 +276,7 @@ function UserTable({ users, onEdit, onPromote, onDelete, canManageRoles }) {
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
       <thead>
         <tr style={{ background: '#f9fafb' }}>
-          {['Employee ID', 'Name', 'Email', 'Role', 'Connection', 'Verified', 'Created', 'Actions'].map(h => (
+          {['Employee ID', 'Name', 'Email', 'Role', 'Eng. Target', 'Rev. Target (₹)', 'Connection', 'Verified', 'Created', 'Actions'].map(h => (
             <th key={h} style={{ padding: '10px 12px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>{h}</th>
           ))}
         </tr>
@@ -250,6 +293,12 @@ function UserTable({ users, onEdit, onPromote, onDelete, canManageRoles }) {
             <td style={{ padding: '10px 12px', fontWeight: 600 }}>{u.name}</td>
             <td style={{ padding: '10px 12px', color: '#6b7280' }}>{u.email}</td>
             <td style={{ padding: '10px 12px' }}><RoleBadge role={u.role} /></td>
+            <td style={{ padding: '10px 12px', color: '#374151', fontWeight: 600 }}>
+              {u.annualEngagementTarget != null ? u.annualEngagementTarget : <span style={{ color: '#9ca3af' }}>—</span>}
+            </td>
+            <td style={{ padding: '10px 12px', color: '#374151', fontWeight: 600 }}>
+              {u.annualRevenueTarget ? `₹${Number(u.annualRevenueTarget).toLocaleString('en-IN')}` : <span style={{ color: '#9ca3af' }}>—</span>}
+            </td>
             <td style={{ padding: '10px 12px', fontSize: '12px', color: '#4b5563' }}>
               {u.defaultConnectionId || (u.connections || [])[0]?.connectionId || '—'}
             </td>
@@ -296,7 +345,7 @@ function UserTable({ users, onEdit, onPromote, onDelete, canManageRoles }) {
           </tr>
         ))}
         {users.length === 0 && (
-          <tr><td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: '#9ca3af' }}>None yet.</td></tr>
+          <tr><td colSpan={10} style={{ padding: '24px', textAlign: 'center', color: '#9ca3af' }}>None yet.</td></tr>
         )}
       </tbody>
     </table>

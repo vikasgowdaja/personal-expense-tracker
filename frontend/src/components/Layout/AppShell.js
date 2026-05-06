@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import AnimatedMenu from './AnimatedMenu';
 
@@ -201,8 +201,14 @@ function AppShell({ user, onLogout }) {
                   <line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" />
                 </svg>
               </button>
-              <img className="ops-brand-logo-small" src="/Infinite8.png" alt="Infinite8 logo" style={{ height: '32px' }} />
-              <div className="ops-header-title">Dashboard</div>
+              <Link
+                to="/dashboard"
+                aria-label="Go to dashboard overview"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', textDecoration: 'none', color: 'inherit' }}
+              >
+                <img className="ops-brand-logo-small" src="/Infinite8.png" alt="Infinite8 logo" style={{ height: '32px' }} />
+                <div className="ops-header-title">Dashboard</div>
+              </Link>
             </div>
             <div className="ops-header-actions ms-auto" ref={profileMenuRef}>
               <motion.button

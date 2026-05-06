@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { clientAPI, employeeAPI, institutionAPI, topicAPI, trainerAPI, trainerSettlementAPI, trainingEngagementAPI } from '../../services/api';
 import ProfitJarAnimation from '../Common/ProfitJarAnimation';
 import WheelPagination from '../ui/WheelPagination';
@@ -82,6 +83,7 @@ function toLocalDateKey(date = new Date()) {
 }
 
 const TODAY_KEY = toLocalDateKey(new Date());
+const UNPAID_STATUS_FILTER = '__unpaid__';
 
 function toDateInputValue(value) {
   if (!value) return '';
@@ -228,6 +230,32 @@ function formatDateSummary(row) {
   return `${formatDate(row.startDate)} → ${formatDate(row.endDate)}`;
 }
 
+function getIndicatorAnchorDate(row) {
+  const dates = normalizeDateList(row.selectedDates || []);
+  if ((row.dateMode || 'range') === 'selected' && dates.length > 0) {
+    return dates[dates.length - 1];
+  }
+  return row.endDate || row.startDate || '';
+}
+
+function getDaysCrossedIndicator(row) {
+  const anchorDate = getIndicatorAnchorDate(row);
+  if (!anchorDate) return '—';
+
+  const anchor = new Date(anchorDate);
+  const today = new Date();
+  if (Number.isNaN(anchor.getTime())) return '—';
+
+  anchor.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+
+  const ageDays = Math.max(Math.floor((today - anchor) / 86400000), 0);
+
+  if (ageDays <= 30) return 'Within 30 days';
+  if (ageDays <= 45) return 'Crossed 30 days';
+  return 'Crossed 45 days';
+}
+
 function formatDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -301,6 +329,9 @@ function normalizeSettlementRow(row) {
 }
 
 function TrainingEngagementsHub({ user }) {
+  const [searchParams] = useSearchParams();
+  const isPrivilegedUser = user?.role === 'superadmin' || user?.role === 'platform_owner';
+  const isEmployeeUser = user?.role === 'employee';
   const [engagements, setEngagements] = useState([]);
   const [form, setForm] = useState(() => {
     const base = { ...EMPTY_FORM };
@@ -379,6 +410,23 @@ function TrainingEngagementsHub({ user }) {
 
   const [currentPage, setCurrentPage] = useState(0);
   const itemsPerPage = 8;
+
+  useEffect(() => {
+    const requestedStatus = searchParams.get('status');
+    if (!requestedStatus) {
+      setFilterStatus('');
+      return;
+    }
+
+    if (requestedStatus.toLowerCase() === 'unpaid') {
+      setFilterStatus(UNPAID_STATUS_FILTER);
+      return;
+    }
+
+    const supportedStatuses = ['Planned', 'Ongoing', 'Completed', 'Invoiced', 'Paid'];
+    const nextStatus = supportedStatuses.find((item) => item.toLowerCase() === requestedStatus.toLowerCase()) || '';
+    setFilterStatus(nextStatus);
+  }, [searchParams]);
 
   useEffect(() => {
     setCurrentPage(0);
@@ -827,6 +875,13 @@ function TrainingEngagementsHub({ user }) {
     if (!summary || summary.totalCount === 0) {
       return { label: 'Not Started', className: 'pill-neutral', settled: false };
     }
+    const rows = summary.rows || [];
+    if (rows.some((item) => String(item.status || '').toLowerCase() === 'approved')) {
+      return { label: 'Approved', className: 'pill-blue', settled: false };
+    }
+    if (rows.some((item) => String(item.status || '').toLowerCase() === 'pending approval')) {
+      return { label: 'Awaiting Approval', className: 'pill-neutral', settled: false };
+    }
     if (summary.paidCount === summary.totalCount) {
       return { label: 'Settled', className: 'pill-green', settled: true };
     }
@@ -840,6 +895,32 @@ function TrainingEngagementsHub({ user }) {
     const summary = settlementSummaryMap.get(String(row.id));
     const allRows = summary?.rows || [];
     const pendingRow = (summary?.rows || []).find((x) => String(x.status || '').toLowerCase() !== 'paid');
+
+    if (isEmployeeUser) {
+      setSettlementDialog({
+        open: true,
+        mode: pendingRow ? 'update' : 'create',
+        settlementId: pendingRow?.id || '',
+        engagementId: row.id,
+        engagementLabel: `${row.college || 'Unknown College'} - ${row.topic || 'Training Engagement'}`,
+        trainerId: row.trainerId || '',
+        trainerName: row.trainerName || '',
+        collegeName: row.college || '',
+        organizationName: row.organization || '',
+        startDate: row.startDate || '',
+        endDate: row.endDate || '',
+        totalDays: Number(pendingRow?.totalDays || row.totalDays || 0),
+        perDayPayment: '0',
+        amount: '0',
+        maxAllowedAmount: 0,
+        netPayableAmount: 0,
+        consumedAmount: 0,
+        status: pendingRow?.status || 'Pending Approval',
+        notes: pendingRow?.notes || ''
+      });
+      return;
+    }
+
     const perDay = Number(pendingRow?.perDayPayment || row.ratePerDay || 0);
     const totalDays = Number(pendingRow?.totalDays || row.totalDays || 0);
     const netPayableAmount = Number(getNetAmount(row) || 0);
@@ -905,11 +986,11 @@ function TrainingEngagementsHub({ user }) {
       window.alert('Engagement not selected for settlement.');
       return;
     }
-    if (Number.isNaN(amount) || amount <= 0) {
+    if (!isEmployeeUser && (Number.isNaN(amount) || amount <= 0)) {
       window.alert('Settlement amount must be greater than 0.');
       return;
     }
-    if (amount > Number(settlementDialog.maxAllowedAmount || 0)) {
+    if (!isEmployeeUser && amount > Number(settlementDialog.maxAllowedAmount || 0)) {
       window.alert(`Settlement amount cannot exceed ${toInr(settlementDialog.maxAllowedAmount)} for this engagement.`);
       return;
     }
@@ -924,10 +1005,10 @@ function TrainingEngagementsHub({ user }) {
       startDate: settlementDialog.startDate || null,
       endDate: settlementDialog.endDate || null,
       totalDays: Number(settlementDialog.totalDays || 0),
-      perDayPayment: Number(settlementDialog.perDayPayment || 0),
-      amount,
-      paidDate: new Date().toISOString(),
-      status: settlementDialog.status || 'Paid',
+      perDayPayment: isEmployeeUser ? 0 : Number(settlementDialog.perDayPayment || 0),
+      amount: isEmployeeUser ? 0 : amount,
+      paidDate: isEmployeeUser ? null : new Date().toISOString(),
+      status: isEmployeeUser ? 'Pending Approval' : (settlementDialog.status || 'Paid'),
       notes: settlementDialog.notes || '',
       sourcedBy: user?.employeeId || user?.name || '',
       sourcedByName: user?.name || ''
@@ -965,7 +1046,7 @@ function TrainingEngagementsHub({ user }) {
     });
   };
 
-  const handleBulkAssign = () => {
+  const handleBulkAssign = async () => {
     if (!bulkSourcedBy.trim()) {
       window.alert('Please choose an employee / admin to assign.');
       return;
@@ -974,15 +1055,33 @@ function TrainingEngagementsHub({ user }) {
       window.alert('Please select at least one record.');
       return;
     }
-    const next = engagements.map((x) =>
-      selectedIds.has(x.id)
-        ? { ...x, sourcedBy: bulkSourcedBy.trim(), sourcedByName: bulkSourcedByName.trim() }
-        : x
-    );
-    persist(next);
-    setSelectedIds(new Set());
-    setBulkSourcedBy('');
-    setBulkSourcedByName('');
+
+    const nextSourcedBy = bulkSourcedBy.trim();
+    const nextSourcedByName = bulkSourcedByName.trim();
+    const targetRows = engagements.filter((row) => selectedIds.has(row.id) && filteredIdSet.has(row.id));
+
+    if (targetRows.length === 0) {
+      window.alert('No visible records selected.');
+      return;
+    }
+
+    try {
+      await Promise.all(
+        targetRows.map((row) =>
+          trainingEngagementAPI.update(row.id, {
+            sourcedBy: nextSourcedBy,
+            sourcedByName: nextSourcedByName
+          })
+        )
+      );
+
+      await loadEngagements();
+      setSelectedIds(new Set());
+      setBulkSourcedBy('');
+      setBulkSourcedByName('');
+    } catch (err) {
+      window.alert(err?.response?.data?.message || 'Unable to update sourced by for selected records.');
+    }
   };
 
   const handleCancel = () => {
@@ -1027,15 +1126,8 @@ function TrainingEngagementsHub({ user }) {
         );
       });
     }
-    // Employee: match by employeeId (preferred) or name
-    const myId = user?.employeeId || user?.name || '';
-    if (!myId) return [];
-    return engagements.filter(
-      (x) =>
-        x.sourcedByUserId === user?.id ||
-        x.sourcedBy === myId ||
-        x.sourcedByName === user?.name
-    );
+    // Employee rows are backend-scoped; do not widen or re-filter client-side.
+    return engagements;
   }, [engagements, user, employeeOptions]);
 
   const stats = useMemo(() => {
@@ -1061,10 +1153,22 @@ function TrainingEngagementsHub({ user }) {
       if (filterCollege && x.college !== filterCollege) return false;
       if (filterOrganization && x.organization !== filterOrganization) return false;
       if (filterTrainer && x.trainerId !== filterTrainer) return false;
-      if (filterStatus && x.paymentStatus !== filterStatus) return false;
+      if (filterStatus === UNPAID_STATUS_FILTER && String(x.paymentStatus || '').toLowerCase() === 'paid') return false;
+      if (filterStatus && filterStatus !== UNPAID_STATUS_FILTER && x.paymentStatus !== filterStatus) return false;
       return true;
     });
   }, [visibleEngagements, filterCollege, filterOrganization, filterTrainer, filterStatus]);
+
+  const filteredIdSet = useMemo(() => {
+    return new Set(filtered.map((item) => item.id));
+  }, [filtered]);
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const next = new Set([...prev].filter((id) => filteredIdSet.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [filteredIdSet]);
 
   const calendarCells = useMemo(() => {
     const start = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth(), 1);
@@ -1121,7 +1225,7 @@ function TrainingEngagementsHub({ user }) {
       <div className="summary-cards">
         <div className="ops-card summary-card teaching-stat-card"><div className="stat-value">{stats.total}</div><div className="stat-label">Total Engagements</div></div>
         <div className="ops-card summary-card teaching-stat-card accent-blue"><div className="stat-value">{stats.totalDays}</div><div className="stat-label">Total Days</div></div>
-        {(user?.role === 'superadmin' || user?.role === 'platform_owner') && (
+        {isPrivilegedUser && (
           <>
             <div className="ops-card summary-card teaching-stat-card accent-green"><div className="stat-value">{toInr(stats.totalGross)}</div><div className="stat-label">Gross Value</div></div>
             <div className="ops-card summary-card teaching-stat-card"><div className="stat-value">{toInr(stats.totalTds)}</div><div className="stat-label">Total TDS</div></div>
@@ -1392,6 +1496,7 @@ function TrainingEngagementsHub({ user }) {
             </select>
             <select className="form-control" style={{ width: 'auto', minWidth: '160px' }} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
               <option value="">All Status</option>
+              <option value={UNPAID_STATUS_FILTER}>Unpaid / Not Yet Paid</option>
               {['Planned', 'Ongoing', 'Completed', 'Invoiced', 'Paid'].map((x) => <option key={x} value={x}>{x}</option>)}
             </select>
             <span style={{ fontSize: '0.85rem', color: 'var(--ops-text-secondary)' }}>{filtered.length} of {visibleEngagements.length}</span>
@@ -1483,13 +1588,13 @@ function TrainingEngagementsHub({ user }) {
                     <th>Sourced By</th>
                     <th>Date Range</th>
                     <th>Days</th>
-                    <th>Hours/Day</th>
-                    {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>Rate/Day</th>}
-                    {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>Gross</th>}
-                    {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>TDS</th>}
-                    {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <th>Net Payable</th>}
+                    <th>Indicator</th>
+                    {isPrivilegedUser && <th>Rate/Day</th>}
+                    {isPrivilegedUser && <th>Gross</th>}
+                    {isPrivilegedUser && <th>TDS</th>}
+                    {isPrivilegedUser && <th>Net Payable</th>}
                     <th>Status</th>
-                    <th>Trainer Settlement</th>
+                    <th>{isEmployeeUser ? 'Settlement Flow' : 'Trainer Settlement'}</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -1520,11 +1625,11 @@ function TrainingEngagementsHub({ user }) {
                       </td>
                       <td style={{ whiteSpace: 'nowrap' }}>{formatDateSummary(x)}</td>
                       <td>{x.totalDays}</td>
-                      <td>{x.dailyHours || '—'}</td>
-                      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td>{toInr(x.ratePerDay)}</td>}
-                      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td>{toInr(getGrossAmount(x))}</td>}
-                      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td>{toInr(getTdsAmount(x))}</td>}
-                      {(user?.role === 'superadmin' || user?.role === 'platform_owner') && <td><strong>{toInr(getNetAmount(x))}</strong></td>}
+                      <td>{getDaysCrossedIndicator(x)}</td>
+                      {isPrivilegedUser && <td>{toInr(x.ratePerDay)}</td>}
+                      {isPrivilegedUser && <td>{toInr(getGrossAmount(x))}</td>}
+                      {isPrivilegedUser && <td>{toInr(getTdsAmount(x))}</td>}
+                      {isPrivilegedUser && <td><strong>{toInr(getNetAmount(x))}</strong></td>}
                       <td>
                         <span className="status-pill pill-neutral">{x.paymentStatus || 'Invoiced'}</span>
                         {String(x.paymentStatus || '').toLowerCase() === 'paid' && x.orgPaymentReceivedAt && (
@@ -1545,7 +1650,7 @@ function TrainingEngagementsHub({ user }) {
                         {(() => {
                           const settlementMeta = getSettlementStatusMeta(x.id);
                           const isPaid = String(x.paymentStatus || '').toLowerCase() === 'paid';
-                          const canMarkOrgPaid = (user?.role === 'superadmin' || user?.role === 'platform_owner') && !isPaid;
+                          const canMarkOrgPaid = isPrivilegedUser && !isPaid;
                           const markOrgPaidStyle = settlementMeta.settled
                             ? MARK_ORG_PAID_GOLD_STYLE
                             : MARK_ORG_PAID_LOCKED_STYLE;
@@ -1557,7 +1662,7 @@ function TrainingEngagementsHub({ user }) {
                                 <button
                                   style={{ ...SETTLE_TRAINER_RESPONSIBILITY_STYLE, padding: '5px 7px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                   onClick={() => openSettlementDialog(x)}
-                                  title="Settle Trainer"
+                                  title={isEmployeeUser ? 'Request Settlement Approval' : 'Settle Trainer'}
                                 >
                                   {/* handshake / payout icon */}
                                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1589,28 +1694,32 @@ function TrainingEngagementsHub({ user }) {
                               )}
 
                               {/* Edit */}
-                              <button
-                                className="btn btn-secondary"
-                                style={{ padding: '5px 7px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                onClick={() => handleEdit(x)}
-                                title="Edit"
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                </svg>
-                              </button>
+                              {isPrivilegedUser && (
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: '5px 7px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                  onClick={() => handleEdit(x)}
+                                  title="Edit"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                  </svg>
+                                </button>
+                              )}
 
                               {/* Delete */}
-                              <button
-                                className="btn btn-danger"
-                                style={{ padding: '5px 7px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                onClick={() => handleDelete(x.id)}
-                                title="Delete"
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                  <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                                </svg>
-                              </button>
+                              {isPrivilegedUser && (
+                                <button
+                                  className="btn btn-danger"
+                                  style={{ padding: '5px 7px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                  onClick={() => handleDelete(x.id)}
+                                  title="Delete"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                                  </svg>
+                                </button>
+                              )}
 
                               {profitAnimationState.active && profitAnimationState.rowId === x.id && (
                                 <ProfitJarAnimation
@@ -1650,7 +1759,7 @@ function TrainingEngagementsHub({ user }) {
           padding: '1rem'
         }}>
           <div className="ops-card" style={{ width: '100%', maxWidth: '760px', maxHeight: '90vh', overflow: 'auto' }}>
-            <h3 style={{ marginTop: 0 }}>{settlementDialog.mode === 'update' ? 'Complete Trainer Settlement' : 'Create Trainer Settlement'}</h3>
+            <h3 style={{ marginTop: 0 }}>{isEmployeeUser ? 'Request Settlement Approval' : (settlementDialog.mode === 'update' ? 'Complete Trainer Settlement' : 'Create Trainer Settlement')}</h3>
             <p className="muted" style={{ marginTop: 0 }}>{settlementDialog.engagementLabel}</p>
 
             <div className="ops-grid-two">
@@ -1666,25 +1775,37 @@ function TrainingEngagementsHub({ user }) {
                 <label>Total Days</label>
                 <input className="form-control" type="number" value={settlementDialog.totalDays} onChange={(e) => handleSettlementField('totalDays', e.target.value)} />
               </div>
-              <div className="form-group">
-                <label>Per Day Payment</label>
-                <input className="form-control" type="number" min="0" step="0.01" value={settlementDialog.perDayPayment} onChange={(e) => handleSettlementField('perDayPayment', e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label>Total Amount</label>
-                <input className="form-control" type="number" min="0" max={settlementDialog.maxAllowedAmount} step="0.01" value={settlementDialog.amount} onChange={(e) => handleSettlementField('amount', e.target.value)} />
-                <span style={{ fontSize: '0.78rem', color: 'var(--ops-text-secondary)', marginTop: '4px', display: 'block' }}>
-                  Max allowed: {toInr(settlementDialog.maxAllowedAmount)} (Net Payable {toInr(settlementDialog.netPayableAmount)} - Already Logged {toInr(settlementDialog.consumedAmount)})
-                </span>
-              </div>
-              <div className="form-group">
-                <label>Status</label>
-                <select className="form-control" value={settlementDialog.status} onChange={(e) => handleSettlementField('status', e.target.value)}>
-                  <option value="Planned">Planned</option>
-                  <option value="Partially Paid">Partially Paid</option>
-                  <option value="Paid">Paid</option>
-                </select>
-              </div>
+              {isPrivilegedUser && (
+                <>
+                  <div className="form-group">
+                    <label>Per Day Payment</label>
+                    <input className="form-control" type="number" min="0" step="0.01" value={settlementDialog.perDayPayment} onChange={(e) => handleSettlementField('perDayPayment', e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Total Amount</label>
+                    <input className="form-control" type="number" min="0" max={settlementDialog.maxAllowedAmount} step="0.01" value={settlementDialog.amount} onChange={(e) => handleSettlementField('amount', e.target.value)} />
+                    <span style={{ fontSize: '0.78rem', color: 'var(--ops-text-secondary)', marginTop: '4px', display: 'block' }}>
+                      Max allowed: {toInr(settlementDialog.maxAllowedAmount)} (Net Payable {toInr(settlementDialog.netPayableAmount)} - Already Logged {toInr(settlementDialog.consumedAmount)})
+                    </span>
+                  </div>
+                  <div className="form-group">
+                    <label>Status</label>
+                    <select className="form-control" value={settlementDialog.status} onChange={(e) => handleSettlementField('status', e.target.value)}>
+                      <option value="Pending Approval">Pending Approval</option>
+                      <option value="Approved">Approved</option>
+                      <option value="Planned">Planned</option>
+                      <option value="Partially Paid">Partially Paid</option>
+                      <option value="Paid">Paid</option>
+                    </select>
+                  </div>
+                </>
+              )}
+              {isEmployeeUser && (
+                <div className="form-group">
+                  <label>Approval Status</label>
+                  <input className="form-control" value={settlementDialog.status || 'Pending Approval'} readOnly />
+                </div>
+              )}
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label>Notes</label>
                 <textarea className="form-control" rows={3} value={settlementDialog.notes} onChange={(e) => handleSettlementField('notes', e.target.value)} />
@@ -1692,7 +1813,7 @@ function TrainingEngagementsHub({ user }) {
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-              <button className="btn btn-primary" onClick={handleSettlementSave}>Save Settlement</button>
+              <button className="btn btn-primary" onClick={handleSettlementSave}>{isEmployeeUser ? 'Send For Approval' : 'Save Settlement'}</button>
               <button className="btn btn-secondary" onClick={closeSettlementDialog}>Cancel</button>
             </div>
           </div>

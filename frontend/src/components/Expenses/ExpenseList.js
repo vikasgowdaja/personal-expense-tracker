@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { expenseAPI } from '../../services/api';
 import WheelPagination from '../ui/WheelPagination';
@@ -27,13 +27,21 @@ function toInr(value) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
 
+function parseInsightPaymentStatus(description) {
+  const tagged = (description || '').match(/PaymentStatus:(pending|received)/i);
+  if (tagged) return tagged[1].toLowerCase();
+  return (description || '').toLowerCase().includes('pending') ? 'pending' : 'received';
+}
+
 function ExpenseList() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [paymentStateFilter, setPaymentStateFilter] = useState('all');
+  const [insightFilter, setInsightFilter] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -45,10 +53,20 @@ function ExpenseList() {
     loadExpenses();
   }, []);
 
+  useEffect(() => {
+    const requestedType = searchParams.get('type') || 'all';
+    const requestedPayment = searchParams.get('paymentState') || 'all';
+    const requestedInsight = searchParams.get('insight') || '';
+
+    setTypeFilter(requestedType);
+    setPaymentStateFilter(requestedPayment);
+    setInsightFilter(requestedInsight);
+  }, [searchParams]);
+
   // Reset pagination when filters or data change
   useEffect(() => {
     setCurrentPage(0);
-  }, [filter, typeFilter, paymentStateFilter, expenses]);
+  }, [filter, typeFilter, paymentStateFilter, insightFilter, expenses]);
 
   const loadExpenses = async () => {
     try {
@@ -165,10 +183,13 @@ function ExpenseList() {
   const filteredExpenses = expenses.filter((expense) => {
     const categoryOk = filter === 'all' || expense.category === filter;
     const entryType = expense.entryType || 'expense';
-    const typeOk = typeFilter === 'all' || entryType === typeFilter;
+    const typeOk = typeFilter === 'all' || (typeFilter === 'liability' ? ['debt', 'credit_card_bill'].includes(entryType) : entryType === typeFilter);
     const paymentState = expense.paymentState || 'paid';
     const paymentOk = paymentStateFilter === 'all' || paymentState === paymentStateFilter;
-    return categoryOk && typeOk && paymentOk;
+    const insightOk = insightFilter === 'unrecovered-pocket'
+      ? parseInsightPaymentStatus(expense.description) === 'pending'
+      : true;
+    return categoryOk && typeOk && paymentOk && insightOk;
   });
 
   const totals = filteredExpenses.reduce((acc, item) => {
@@ -229,6 +250,7 @@ function ExpenseList() {
           >
             <option value="all">All Types</option>
             <option value="expense">Expense</option>
+            <option value="liability">Debt + Credit Card</option>
             <option value="debt">Debt</option>
             <option value="credit_card_bill">Credit Card Bill</option>
           </select>
@@ -246,6 +268,12 @@ function ExpenseList() {
           </select>
         </div>
       </div>
+
+      {insightFilter === 'unrecovered-pocket' && (
+        <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #dc2626' }}>
+          <strong>Insight filter active:</strong> showing only company-pocket records still tagged as pending recovery.
+        </div>
+      )}
 
       {showForm && (
         <div className="card add-expense-card" style={{ marginBottom: 16 }}>

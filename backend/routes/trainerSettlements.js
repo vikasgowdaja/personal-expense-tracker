@@ -9,7 +9,7 @@ const router = express.Router();
 
 async function getUserWithConnections(userId) {
   return User.findById(userId)
-    .select('role connections')
+    .select('role employeeId name connections')
     .lean();
 }
 
@@ -42,24 +42,24 @@ async function buildSettlementScope(userDoc) {
     };
   }
 
-  const activeConnections = (userDoc.connections || []).filter((c) => c.isActive !== false);
-  const pairClauses = activeConnections.map((c) => ({
-    ownerSuperadminId: c.superadminId,
-    connectionId: c.connectionId
-  }));
+  const sourceKey = String(userDoc.employeeId || userDoc.name || '').trim();
+  if (!sourceKey) {
+    return { _id: null };
+  }
 
-  return {
-    $or: [
-      { sourcedByUserId: userDoc._id },
-      { user: userDoc._id },
-      ...pairClauses
-    ]
-  };
+  return { sourcedBy: sourceKey };
 }
 
 function mergeScopeAndFilters(scope, filters) {
   if (!filters || Object.keys(filters).length === 0) return scope;
   return { $and: [scope, filters] };
+}
+
+function sanitizeSettlementForEmployee(row) {
+  const plain = typeof row.toObject === 'function' ? row.toObject() : { ...row };
+  delete plain.amount;
+  delete plain.perDayPayment;
+  return plain;
 }
 
 function toMoney(value) {
@@ -124,7 +124,7 @@ router.get('/', auth, async (req, res) => {
       .sort({ paidDate: -1, createdAt: -1 })
       .lean();
 
-    res.json(rows);
+    res.json(userDoc.role === 'employee' ? rows.map(sanitizeSettlementForEmployee) : rows);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server error');
@@ -163,22 +163,29 @@ router.post(
         return res.status(404).json({ message: 'Training engagement not found in your scope' });
       }
 
-      const capResult = await validateSettlementCap({
-        trainingEngagementId: req.body.trainingEngagementId,
-        amount: req.body.amount,
-        engagement
-      });
+      const isEmployee = userDoc.role === 'employee';
 
-      if (!capResult.ok) {
-        return res.status(400).json({
-          message: 'Settlement amount exceeds engagement net payable limit',
-          details: {
-            netPayableAmount: capResult.netPayable,
-            alreadyAllocatedAmount: capResult.consumed,
-            requestedAmount: capResult.requested,
-            remainingAllowedAmount: capResult.remaining
-          }
+      // Only enforce the settlement cap for employee-submitted requests.
+      // Admins (superadmin / platform_owner) are trusted to set any amount —
+      // multi-trainer engagements would otherwise be incorrectly blocked.
+      if (isEmployee) {
+        const capResult = await validateSettlementCap({
+          trainingEngagementId: req.body.trainingEngagementId,
+          amount: req.body.amount,
+          engagement
         });
+
+        if (!capResult.ok) {
+          return res.status(400).json({
+            message: 'Settlement amount exceeds engagement net payable limit',
+            details: {
+              netPayableAmount: capResult.netPayable,
+              alreadyAllocatedAmount: capResult.consumed,
+              requestedAmount: capResult.requested,
+              remainingAllowedAmount: capResult.remaining
+            }
+          });
+        }
       }
 
       const row = new TrainerSettlement({
@@ -197,10 +204,10 @@ router.post(
         startDate: req.body.startDate || null,
         endDate: req.body.endDate || null,
         totalDays: Number(req.body.totalDays || 0),
-        perDayPayment: Number(req.body.perDayPayment || 0),
-        amount: Number(req.body.amount || 0),
-        paidDate: req.body.paidDate || new Date().toISOString(),
-        status: req.body.status || 'Planned',
+        perDayPayment: isEmployee ? 0 : Number(req.body.perDayPayment || 0),
+        amount: isEmployee ? 0 : Number(req.body.amount || 0),
+        paidDate: isEmployee ? null : (req.body.paidDate || new Date().toISOString()),
+        status: isEmployee ? 'Pending Approval' : (req.body.status || 'Planned'),
         notes: req.body.notes || ''
       });
 
@@ -234,24 +241,30 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(404).json({ message: 'Training engagement not found in your scope' });
     }
 
-    const nextAmount = req.body.amount !== undefined ? req.body.amount : row.amount;
-    const capResult = await validateSettlementCap({
-      trainingEngagementId: row.trainingEngagementId,
-      amount: nextAmount,
-      excludeSettlementId: row._id,
-      engagement
-    });
+    const isEmployee = userDoc.role === 'employee';
 
-    if (!capResult.ok) {
-      return res.status(400).json({
-        message: 'Settlement amount exceeds engagement net payable limit',
-        details: {
-          netPayableAmount: capResult.netPayable,
-          alreadyAllocatedAmount: capResult.consumed,
-          requestedAmount: capResult.requested,
-          remainingAllowedAmount: capResult.remaining
-        }
+    // Only enforce the cap for employee-submitted updates. Admins are trusted
+    // to approve any amount; multi-trainer engagements would be wrongly blocked otherwise.
+    if (isEmployee) {
+      const nextAmount = row.amount;
+      const capResult = await validateSettlementCap({
+        trainingEngagementId: row.trainingEngagementId,
+        amount: nextAmount,
+        excludeSettlementId: row._id,
+        engagement
       });
+
+      if (!capResult.ok) {
+        return res.status(400).json({
+          message: 'Settlement amount exceeds engagement net payable limit',
+          details: {
+            netPayableAmount: capResult.netPayable,
+            alreadyAllocatedAmount: capResult.consumed,
+            requestedAmount: capResult.requested,
+            remainingAllowedAmount: capResult.remaining
+          }
+        });
+      }
     }
 
     const scalarFields = [
@@ -263,18 +276,25 @@ router.put('/:id', auth, async (req, res) => {
       'startDate',
       'endDate',
       'totalDays',
-      'perDayPayment',
-      'amount',
-      'paidDate',
-      'status',
       'notes'
     ];
+
+    if (!isEmployee) {
+      scalarFields.push('perDayPayment', 'amount', 'paidDate', 'status');
+    }
 
     scalarFields.forEach((field) => {
       if (req.body[field] !== undefined) {
         row[field] = req.body[field];
       }
     });
+
+    if (isEmployee) {
+      row.status = row.status === 'Paid' ? 'Paid' : 'Pending Approval';
+      row.perDayPayment = 0;
+      row.amount = 0;
+      row.paidDate = null;
+    }
 
     const saved = await row.save();
     res.json(saved);

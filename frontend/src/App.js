@@ -23,6 +23,8 @@ import ProtectedRoute from './components/Auth/ProtectedRoute';
 import { authAPI } from './services/api';
 import { DB_BACKED_KEYS, initDbBackedStorage } from './services/dbBackedStorage';
 
+const EMPLOYEE_DB_BACKED_KEYS = ['teaching_sessions', 'daily_logs'];
+
 function clearDbBackedLocalCache() {
   DB_BACKED_KEYS.forEach((key) => localStorage.removeItem(key));
 }
@@ -114,8 +116,9 @@ function App() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    initDbBackedStorage();
-  }, [isAuthenticated]);
+    const allowedKeys = user?.role === 'employee' ? EMPLOYEE_DB_BACKED_KEYS : DB_BACKED_KEYS;
+    initDbBackedStorage(allowedKeys);
+  }, [isAuthenticated, user]);
 
   const handleLogin = (token, userData, refreshToken) => {
     localStorage.setItem('token', token);
@@ -187,7 +190,6 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="insights" element={<Navigate to="/dashboard?tab=insights" replace />} />
             <Route path="profile" element={<Profile />} />
             <Route
               path="teaching"
@@ -238,6 +240,14 @@ function App() {
             />
             <Route
               path="insights"
+              element={
+                <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
+                  <Insights user={user} />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="insights/:detailKey"
               element={
                 <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
                   <Insights user={user} />
