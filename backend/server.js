@@ -3,9 +3,12 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
+const fs = require('fs');
 
 // Load environment variables
 dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
 
@@ -65,6 +68,12 @@ app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/auth', require('./routes/auth'));
 
+// Auth aliases for single-domain deployments that use /auth/* directly
+app.use('/auth/request-otp', otpLimiter);
+app.use('/auth/login', authLimiter);
+app.use('/auth/register', authLimiter);
+app.use('/auth', require('./routes/auth'));
+
 // Business routes
 app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/categories', require('./routes/categories'));
@@ -87,9 +96,28 @@ app.use('/api/employees', require('./routes/employees'));
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 
-app.get('/', (req, res) => {
-  res.json({ message: 'Personal Ops Intelligence API' });
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
 });
+
+app.use('/api', (req, res) => {
+  res.status(404).json({ message: 'API route not found' });
+});
+
+const frontendDistPath = path.resolve(__dirname, '../frontend/dist');
+const hasFrontendBuild = fs.existsSync(frontendDistPath);
+
+if (process.env.NODE_ENV === 'production' && hasFrontendBuild) {
+  app.use(express.static(frontendDistPath));
+
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+} else {
+  app.get('/', (req, res) => {
+    res.json({ message: 'Personal Ops Intelligence API' });
+  });
+}
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

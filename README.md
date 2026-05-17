@@ -1,5 +1,123 @@
 # Personal Ops Intelligence - MERN Stack with AI
 
+## Monorepo Full-Stack Deployment (Single App, Single Port)
+
+This repository now supports a true monorepo full-stack deployment model:
+
+- One repository
+- One Node.js process
+- One domain
+- One production port
+- Backend serves frontend static build from `frontend/dist`
+
+### Final Architecture
+
+```text
+project-root/
+├── frontend/          # React + Vite app
+├── backend/           # Express + MongoDB APIs
+├── package.json       # Root scripts for dev/build/start
+├── .gitignore
+├── .env
+├── Dockerfile         # Single image: builds frontend + runs backend
+└── docker-compose.yml # Optional single-service local/prod compose
+```
+
+### Runtime Behavior
+
+- Production:
+   - `npm run build` builds frontend to `frontend/dist`
+   - `npm run start` starts backend only
+   - backend serves:
+      - static files from `frontend/dist`
+      - API routes under `/api/*`
+      - SPA fallback for non-API routes to `frontend/dist/index.html`
+
+- Development:
+   - `npm run dev` starts frontend (Vite on 3000) and backend (Express on 5000)
+   - Vite proxies `/api` to backend (`http://localhost:5000`)
+
+### Root Scripts
+
+```bash
+npm run dev
+npm run frontend
+npm run backend
+npm run build
+npm run start
+```
+
+### Environment Setup
+
+Use root `.env` for shared deployment values:
+
+```env
+PORT=5000
+MONGODB_URI=mongodb://localhost:27017/expense-tracker
+JWT_SECRET=change_me_in_production
+JWT_REFRESH_SECRET=change_me_in_production
+MAIL_USER=
+MAIL_PASS=
+CORS_ORIGINS=
+VITE_API_BASE_URL=/api
+```
+
+Notes:
+- backend also supports `backend/.env`.
+- if both exist, backend-local values are loaded first.
+
+### Single Deploy Steps (Render/Railway/VPS/Azure App Service)
+
+1. Set build command:
+
+```bash
+npm install && npm install --prefix frontend && npm run build
+```
+
+2. Set start command:
+
+```bash
+npm run start
+```
+
+3. Set environment variables from root `.env` in your hosting provider.
+
+4. Expose only one port:
+   - provider `PORT` -> backend listens on that same port.
+
+### Render Blueprint (optional)
+
+Create a Web Service from this repo with:
+- Environment: `Node`
+- Build Command: `npm install && npm install --prefix frontend && npm run build`
+- Start Command: `npm run start`
+- Auto-assign `PORT`
+
+This serves both UI and API from one service:
+
+- `https://your-app.onrender.com/`
+- `https://your-app.onrender.com/api/expenses`
+
+### Docker (Single Container)
+
+Build and run:
+
+```bash
+docker build -t personal-ops-intelligence .
+docker run --env-file .env -p 5000:8080 personal-ops-intelligence
+```
+
+Or use compose:
+
+```bash
+docker compose up --build
+```
+
+### Backward Compatibility Notes
+
+- Existing APIs, auth, MongoDB connectivity, OCR/AI modules, middleware, routes, and business logic are preserved.
+- Existing separate frontend/backend docker and deployment files are left in place for reference, but the new root Docker setup is the recommended single-app path.
+
 A voice-first personal operations platform built with MongoDB, Express.js, React, and Node.js, **powered by an advanced offline AI system (PFIE)** for intelligent financial analysis, daily schedule classification, income tracking, teaching logs, vendor operations, and payment timelines.
 
 ## 🌟 AI Features (PFIE - Offline Personal Financial Intelligence Engine)

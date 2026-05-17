@@ -1,0 +1,26 @@
+# Root dependencies
+node_modules/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Backend
+backend/node_modules/
+backend/uploads/
+
+# Env and secrets
+.env
+.env.*
+backend/.env
+frontend/.env
+frontend/.env.*
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.vscode/

@@ -8,10 +8,10 @@ RUN npm ci
 
 COPY . .
 
-ARG REACT_APP_API_BASE_URL=/api
-ENV REACT_APP_API_BASE_URL=${REACT_APP_API_BASE_URL}
+ARG VITE_API_BASE_URL=/api
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
-# Increase Node memory for large CRA builds
+# Increase Node memory for larger builds
 ENV NODE_OPTIONS=--max-old-space-size=1536
 
 RUN npm run build
@@ -23,7 +23,7 @@ FROM nginx:1.27-alpine
 RUN rm /etc/nginx/conf.d/default.conf
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/build /usr/share/nginx/html
+COPY --from=build /app/dist /usr/share/nginx/html
 
 # Non-root nginx
 RUN chown -R nginx:nginx /usr/share/nginx/html && \
