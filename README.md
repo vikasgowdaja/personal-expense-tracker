@@ -98,21 +98,6 @@ This serves both UI and API from one service:
 - `https://your-app.onrender.com/`
 - `https://your-app.onrender.com/api/expenses`
 
-### Docker (Single Container)
-
-Build and run:
-
-```bash
-docker build -t personal-ops-intelligence .
-docker run --env-file .env -p 5000:8080 personal-ops-intelligence
-```
-
-Or use compose:
-
-```bash
-docker compose up --build
-```
-
 ### Backward Compatibility Notes
 
 - Existing APIs, auth, MongoDB connectivity, OCR/AI modules, middleware, routes, and business logic are preserved.

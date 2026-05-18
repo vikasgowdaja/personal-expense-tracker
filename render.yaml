@@ -3,7 +3,7 @@ services:
     name: personal-ops-intelligence
     env: node
     plan: starter
-    buildCommand: npm install && npm install --prefix frontend && npm run build
+    buildCommand: npm install --include=dev && npm install --prefix frontend --include=dev && npm run build
     startCommand: npm run start
     autoDeploy: true
     envVars:

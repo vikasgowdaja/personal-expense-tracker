@@ -22,7 +22,6 @@ Use these exact values unless you intentionally rename Azure resources.
 
 ## 3. Required Local Tools
 
-- Docker Desktop
 - Azure CLI (az)
 - Logged into Azure with permissions on the resource group
 
