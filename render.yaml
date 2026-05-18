@@ -1,9 +1,9 @@
 services:
   - type: web
     name: personal-ops-intelligence
-    env: node
+    runtime: node
     plan: starter
-    buildCommand: npm install --include=dev && npm install --prefix frontend --include=dev && npm run build
+    buildCommand: npm install --include=dev && npm install --prefix backend && npm install --prefix frontend --include=dev && npm run build
     startCommand: npm run start
     autoDeploy: true
     envVars:

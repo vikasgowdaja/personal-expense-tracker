@@ -71,7 +71,7 @@ Notes:
 1. Set build command:
 
 ```bash
-npm install && npm install --prefix frontend && npm run build
+npm install && npm install --prefix backend && npm install --prefix frontend --include=dev && npm run build
 ```
 
 2. Set start command:
@@ -89,7 +89,7 @@ npm run start
 
 Create a Web Service from this repo with:
 - Environment: `Node`
-- Build Command: `npm install && npm install --prefix frontend && npm run build`
+- Build Command: `npm install && npm install --prefix backend && npm install --prefix frontend --include=dev && npm run build`
 - Start Command: `npm run start`
 - Auto-assign `PORT`
 
