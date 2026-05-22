@@ -407,6 +407,8 @@ function TrainingEngagementsHub({ user }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkSourcedBy, setBulkSourcedBy] = useState('');
   const [bulkSourcedByName, setBulkSourcedByName] = useState('');
+  const [actionsColumnFocused, setActionsColumnFocused] = useState(false);
+  const tableScrollRef = useRef(null);
 
   const [currentPage, setCurrentPage] = useState(0);
   const itemsPerPage = 8;
@@ -431,6 +433,20 @@ function TrainingEngagementsHub({ user }) {
   useEffect(() => {
     setCurrentPage(0);
   }, [filterCollege, filterOrganization, filterTrainer, filterStatus]);
+
+  const toggleActionsColumnFocus = () => {
+    const wrapper = tableScrollRef.current;
+    if (!wrapper) return;
+
+    setActionsColumnFocused((prev) => {
+      const next = !prev;
+      wrapper.scrollTo({
+        left: next ? wrapper.scrollWidth - wrapper.clientWidth : 0,
+        behavior: 'smooth'
+      });
+      return next;
+    });
+  };
 
   const persist = (next) => {
     setEngagements(next);
@@ -1499,6 +1515,14 @@ function TrainingEngagementsHub({ user }) {
               <option value={UNPAID_STATUS_FILTER}>Unpaid / Not Yet Paid</option>
               {['Planned', 'Ongoing', 'Completed', 'Invoiced', 'Paid'].map((x) => <option key={x} value={x}>{x}</option>)}
             </select>
+            <button
+              className="btn btn-secondary"
+              style={{ padding: '8px 12px', fontSize: '0.82rem' }}
+              onClick={toggleActionsColumnFocus}
+              type="button"
+            >
+              {actionsColumnFocused ? 'Back To Left' : 'Focus Actions'}
+            </button>
             <span style={{ fontSize: '0.85rem', color: 'var(--ops-text-secondary)' }}>{filtered.length} of {visibleEngagements.length}</span>
           </div>
 
@@ -1568,8 +1592,8 @@ function TrainingEngagementsHub({ user }) {
           {filtered.length === 0 ? (
             <p className="muted">No engagement records found.</p>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="ops-table">
+            <div ref={tableScrollRef} className="training-engagements-table-wrap">
+              <table className="ops-table training-engagements-table">
                 <thead>
                   <tr>
                     <th style={{ width: '36px', textAlign: 'center' }}>
@@ -1595,7 +1619,12 @@ function TrainingEngagementsHub({ user }) {
                     {isPrivilegedUser && <th>Net Payable</th>}
                     <th>Status</th>
                     <th>{isEmployeeUser ? 'Settlement Flow' : 'Trainer Settlement'}</th>
-                    <th>Actions</th>
+                    <th
+                      className="training-engagements-actions-col training-engagements-actions-head"
+                      style={{ position: 'sticky', right: 0, zIndex: 5, minWidth: '220px' }}
+                    >
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1646,7 +1675,18 @@ function TrainingEngagementsHub({ user }) {
                           );
                         })()}
                       </td>
-                      <td style={{ whiteSpace: 'nowrap', position: 'relative', overflow: 'visible' }}>
+                      <td
+                        className="training-engagements-actions-col"
+                        style={{
+                          position: 'sticky',
+                          right: 0,
+                          zIndex: 4,
+                          minWidth: '220px',
+                          whiteSpace: 'nowrap',
+                          overflow: 'visible',
+                          background: selectedIds.has(x.id) ? '#f5f3ff' : '#ffffff'
+                        }}
+                      >
                         {(() => {
                           const settlementMeta = getSettlementStatusMeta(x.id);
                           const isPaid = String(x.paymentStatus || '').toLowerCase() === 'paid';
