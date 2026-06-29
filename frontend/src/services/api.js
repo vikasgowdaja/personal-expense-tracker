@@ -252,6 +252,25 @@ export const paymentDetailsAPI = {
   delete: (id) => api.delete(`/payment-details/${id}`)
 };
 
+export const financeAPI = {
+  uploadImages: (formData, autoSave = false) => api.post(`/finance/upload?autoSave=${autoSave ? 'true' : 'false'}`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  }),
+  getTransactions: (params = {}) => api.get('/finance/transactions', { params }),
+  createTransaction: (data) => api.post('/finance/transactions', data),
+  saveReviewedTransactions: (transactions, rawImageIds = []) => api.post('/finance/transactions/bulk', { transactions, rawImageIds }),
+  updateTransaction: (id, data) => api.put(`/finance/transactions/${id}`, data),
+  deleteTransaction: (id) => api.delete(`/finance/transactions/${id}`),
+  setCash: (totalCashGiven) => api.post('/finance/cash', { totalCashGiven }),
+  getSummary: () => api.get('/finance/summary'),
+  addCreditCard: (data) => api.post('/finance/credit-card', data),
+  updateCreditCard: (id, data) => api.put(`/finance/credit-card/${id}`, data),
+  exportPdf: () => api.get('/finance/export/pdf', { responseType: 'blob' }),
+  exportExcel: () => api.get('/finance/export/excel', { responseType: 'blob' })
+};
+
 // SuperAdmin-only APIs
 export const financialAPI = {
   getSummary: () => api.get('/financial/summary'),

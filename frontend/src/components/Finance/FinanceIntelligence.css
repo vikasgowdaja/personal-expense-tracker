@@ -1,0 +1,234 @@
+.fi-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.fi-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.fi-header h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.fi-header p {
+  margin: 6px 0 0;
+  color: #4d5b66;
+}
+
+.fi-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f7fbfc 100%);
+  border: 1px solid #d9e6eb;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(22, 62, 77, 0.06);
+}
+
+.fi-metrics {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.fi-metric p {
+  margin: 0;
+  color: #4d5b66;
+}
+
+.fi-metric h3 {
+  margin: 6px 0 0;
+}
+
+.fi-link-btn {
+  margin-top: 6px;
+  border: none;
+  background: none;
+  color: #0b7285;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0;
+}
+
+.fi-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.fi-dropzone {
+  border: 2px dashed #94bec7;
+  border-radius: 12px;
+  background: #f4fbfd;
+  color: #3a5661;
+  padding: 26px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.fi-dropzone.active {
+  border-color: #0b7285;
+  background: #e7f5f8;
+}
+
+.fi-table-wrap {
+  overflow-x: auto;
+}
+
+.fi-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.fi-table th,
+.fi-table td {
+  border-bottom: 1px solid #e4edf1;
+  padding: 9px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.fi-table th {
+  color: #34515d;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fi-input {
+  border: 1px solid #c4d7de;
+  border-radius: 8px;
+  padding: 7px 9px;
+  width: 100%;
+  min-width: 120px;
+}
+
+.fi-input-small {
+  min-width: 110px;
+}
+
+.fi-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.fi-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.fi-btn-primary {
+  background: #0b7285;
+  color: #fff;
+}
+
+.fi-btn-secondary {
+  background: #edf3f5;
+  color: #24424d;
+}
+
+.fi-btn-danger {
+  background: #c92a2a;
+  color: #fff;
+}
+
+.fi-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fi-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.fi-review-block {
+  margin-bottom: 14px;
+}
+
+.fi-row-image {
+  background: #f2f8fd;
+}
+
+.fi-row-manual {
+  background: #ffffff;
+}
+
+.fi-low-confidence {
+  outline: 1px solid #f08c00;
+  background: #fff6e8;
+}
+
+.fi-dues-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fi-due-item {
+  border: 1px solid #e1e9ed;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fi-due-item p {
+  margin: 4px 0 0;
+  color: #425b66;
+}
+
+.fi-inline-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  align-items: end;
+}
+
+.fi-error {
+  margin: 0;
+  color: #c92a2a;
+  font-weight: 600;
+}
+
+.fi-muted {
+  color: #59717c;
+}
+
+.fi-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 22, 26, 0.55);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+}
+
+.fi-modal {
+  width: min(420px, 92vw);
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #d5e4ea;
+}
+
+.negative {
+  color: #c92a2a;
+}

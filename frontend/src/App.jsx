@@ -19,6 +19,7 @@ import EmployeeManager from './components/Admin/EmployeeManager';
 import InvoiceHub from './components/Invoices/InvoiceHub';
 import Insights from './components/Insights/Insights';
 import FinancialDashboard from './components/Dashboard/FinancialDashboard';
+import FinanceIntelligence from './components/Finance/FinanceIntelligence';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import { authAPI } from './services/api';
 import { DB_BACKED_KEYS, initDbBackedStorage } from './services/dbBackedStorage';
@@ -259,6 +260,14 @@ function App() {
               element={
                 <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
                   <FinancialDashboard user={user} />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="finance"
+              element={
+                <ProtectedRoute user={user} requiredRoles={['superadmin', 'platform_owner']}>
+                  <FinanceIntelligence />
                 </ProtectedRoute>
               }
             />

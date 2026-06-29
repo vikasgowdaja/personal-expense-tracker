@@ -9,6 +9,10 @@ const EXPECTED_COLLECTIONS = [
   { logicalName: 'training_engagements', collectionName: 'trainingengagements', purpose: 'training engagement records' },
   { logicalName: 'invoices', collectionName: 'invoices', purpose: 'invoice records' },
   { logicalName: 'payment_details', collectionName: 'paymentdetails', purpose: 'trainer payment details' },
+  { logicalName: 'transactions', collectionName: 'transactions', purpose: 'finance image intelligence transactions' },
+  { logicalName: 'credit_cards', collectionName: 'creditcards', purpose: 'finance module credit card dues' },
+  { logicalName: 'cash_accounts', collectionName: 'cashaccounts', purpose: 'finance cash account state' },
+  { logicalName: 'raw_images', collectionName: 'rawimages', purpose: 'uploaded finance image metadata' },
   { logicalName: 'processed_data', collectionName: 'processeddatas', purpose: 'OCR/AI processed data' },
   { logicalName: 'user_data_store', collectionName: 'userdatastores', purpose: 'db-backed cache payloads' },
   { logicalName: 'demo_seed_runs', collectionName: 'demo_seed_runs', purpose: 'seed run tracking and rollback' }

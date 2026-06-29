@@ -16,6 +16,7 @@ const SUPERADMIN_NAV_ITEMS = [
   { to: '/expenses', label: 'Expenses & Debts', icon: 'log' },
   { to: '/trainer-settlements', label: 'Trainer Settlement', icon: 'payments' },
   { to: '/insights', label: 'Insights', icon: 'insights' },
+  { to: '/finance', label: 'Finance Intelligence', icon: 'financial' },
   { to: '/financial-reports', label: 'Financial Reports', icon: 'financial' },
   { to: '/invoices', label: 'Invoices', icon: 'invoice' },
   { to: '/employees', label: 'Employees', icon: 'employees' }

@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "password:reset": "node scripts/resetUserPassword.js",
     "seed:demo": "node scripts/seedDemoData.js",
     "seed:demo:list": "node scripts/seedDemoData.js --list-runs",
     "seed:demo:remove": "node scripts/seedDemoData.js --remove-run",
@@ -24,6 +25,7 @@
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
+    "exceljs": "^4.4.0",
     "express": "^4.18.2",
     "express-rate-limit": "^8.3.2",
     "express-validator": "^7.0.1",
@@ -32,6 +34,7 @@
     "multer": "^2.0.2",
     "node-fetch": "^3.3.2",
     "nodemailer": "^8.0.5",
+    "pdfkit": "^0.17.2",
     "pdf-parse": "^2.4.5",
     "sharp": "^0.34.5",
     "tesseract.js": "^7.0.0"
