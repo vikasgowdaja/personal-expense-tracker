@@ -53,7 +53,7 @@ app.use(express.json({ limit: '2mb' }));
 
 // ─── Database ─────────────────────────────────────────────────────────────────
 
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/expense-tracker', {
+mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://vikas_gowda:4OUDW3Y2EW7GyEUV@pit.t4ufrjg.mongodb.net/innovation_portal', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
