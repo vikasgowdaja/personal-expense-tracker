@@ -21,7 +21,7 @@ Receipt with 10 items → 10 expense records (individual items)
 Test that all components are working:
 
 ```bash
-cd backend
+cd server
 python ai/items/test_multi_item.py
 ```
 
@@ -184,7 +184,7 @@ Saves all items at once
 ## File Structure
 
 ```
-backend/ai/items/
+server/ai/items/
   ├── __init__.py              (module init)
   ├── item_detector.py         (finds line items)
   ├── item_extractor.py        (extracts fields)

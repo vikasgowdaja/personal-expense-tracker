@@ -39,7 +39,7 @@ Screenshot → OCR → Layout AI → Structured Data → ML Models → Insights 
 ### Folder Structure
 
 ```
-backend/ai/
+server/ai/
 ├── ocr/
 │   └── paddle_ocr.py          # PaddleOCR extraction
 ├── layout_ai/
@@ -61,7 +61,7 @@ backend/ai/
 ### 1. Install Python Dependencies
 
 ```bash
-cd backend
+cd server
 pip install -r requirements_ai.txt
 ```
 
@@ -73,13 +73,13 @@ pip install -r requirements_ai.txt
 ### 2. Set Up Database
 
 ```bash
-sqlite3 backend/expense_tracker.db < backend/ai/db/schema.sql
+sqlite3 server/expense_tracker.db < server/ai/db/schema.sql
 ```
 
 ### 3. Start the Backend
 
 ```bash
-cd backend
+cd server
 npm run dev
 ```
 
@@ -361,7 +361,7 @@ SPEND_FORECAST_CONFIDENCE = 0.75
 ### View System Health
 
 ```bash
-python backend/ai/healing/retrain.py report
+python server/ai/healing/retrain.py report
 ```
 
 **Output**:
@@ -387,7 +387,7 @@ python backend/ai/healing/retrain.py report
 ### Enable Debug Logging
 
 ```javascript
-// In backend/routes/ocr.js
+// In server/routes/ocr.js
 console.log(`[PFIE] Processing ${file.originalname}...`);
 ```
 
@@ -468,12 +468,12 @@ System auto-learns: "Jai Bhajarangi → Shopping"
 
 ```bash
 # Collect corrections
-python backend/ai/healing/retrain.py record \
+python server/ai/healing/retrain.py record \
   --original='{"name":"Jia","amount":140}' \
   --corrected='{"name":"Jai Bhajarangi","amount":140}'
 
 # View corrections
-python backend/ai/healing/retrain.py report
+python server/ai/healing/retrain.py report
 ```
 
 ### Custom Layout Rules
@@ -490,7 +490,7 @@ def extract_custom_fields(self, text):
 ### Model Fine-tuning
 
 ```bash
-python backend/ai/ml/train.py \
+python server/ai/ml/train.py \
   --data=corrections.json \
   --model=spend_forecast
 ```
@@ -544,7 +544,7 @@ tail -f logs/server.log | grep PFIE
 
 Or run diagnostics:
 ```bash
-python backend/ai/pipeline.py /path/to/image.png
+python server/ai/pipeline.py /path/to/image.png
 ```
 
 ---

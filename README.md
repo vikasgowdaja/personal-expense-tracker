@@ -8,14 +8,14 @@ This repository now supports a true monorepo full-stack deployment model:
 - One Node.js process
 - One domain
 - One production port
-- Backend serves frontend static build from `frontend/dist`
+- Backend serves frontend static build from `client/dist`
 
 ### Final Architecture
 
 ```text
 project-root/
-├── frontend/          # React + Vite app
-├── backend/           # Express + MongoDB APIs
+├── client/          # React + Vite app
+├── server/           # Express + MongoDB APIs
 ├── package.json       # Root scripts for dev/build/start
 ├── .gitignore
 ├── .env
@@ -26,12 +26,12 @@ project-root/
 ### Runtime Behavior
 
 - Production:
-   - `npm run build` builds frontend to `frontend/dist`
+   - `npm run build` builds frontend to `client/dist`
    - `npm run start` starts backend only
    - backend serves:
-      - static files from `frontend/dist`
+      - static files from `client/dist`
       - API routes under `/api/*`
-      - SPA fallback for non-API routes to `frontend/dist/index.html`
+      - SPA fallback for non-API routes to `client/dist/index.html`
 
 - Development:
    - `npm run dev` starts frontend (Vite on 3000) and backend (Express on 5000)
@@ -63,7 +63,7 @@ VITE_API_BASE_URL=/api
 ```
 
 Notes:
-- backend also supports `backend/.env`.
+- backend also supports `server/.env`.
 - if both exist, backend-local values are loaded first.
 
 ### Single Deploy Steps (Render/Railway/VPS/Azure App Service)
@@ -71,7 +71,7 @@ Notes:
 1. Set build command:
 
 ```bash
-npm install && npm install --prefix backend && npm install --prefix frontend --include=dev && npm run build
+npm install && npm install --prefix server && npm install --prefix client --include=dev && npm run build
 ```
 
 2. Set start command:
@@ -89,7 +89,7 @@ npm run start
 
 Create a Web Service from this repo with:
 - Environment: `Node`
-- Build Command: `npm install && npm install --prefix backend && npm install --prefix frontend --include=dev && npm run build`
+- Build Command: `npm install && npm install --prefix server && npm install --prefix client --include=dev && npm run build`
 - Start Command: `npm run start`
 - Auto-assign `PORT`
 
@@ -101,7 +101,7 @@ This serves both UI and API from one service:
 ### Backward Compatibility Notes
 
 - Existing APIs, auth, MongoDB connectivity, OCR/AI modules, middleware, routes, and business logic are preserved.
-- Existing separate frontend/backend docker and deployment files are left in place for reference, but the new root Docker setup is the recommended single-app path.
+- Existing separate client/backend docker and deployment files are left in place for reference, but the new root Docker setup is the recommended single-app path.
 
 A voice-first personal operations platform built with MongoDB, Express.js, React, and Node.js, **powered by an advanced offline AI system (PFIE)** for intelligent financial analysis, daily schedule classification, income tracking, teaching logs, vendor operations, and payment timelines.
 
@@ -176,7 +176,7 @@ cd personal-expense-tracker
 ### 2. Backend Setup
 
 ```bash
-cd backend
+cd server
 npm install
 ```
 
@@ -192,7 +192,7 @@ JWT_SECRET=your_secret_key_here_change_this_in_production
 ### 3. Frontend Setup
 
 ```bash
-cd frontend
+cd client
 npm install
 ```
 
@@ -210,7 +210,7 @@ mongod
 
 ### Start Backend Server
 ```bash
-cd backend
+cd server
 npm start
 # or for development with auto-reload
 npm run dev
@@ -219,7 +219,7 @@ Backend will run on http://localhost:5000
 
 ### Start Frontend
 ```bash
-cd frontend
+cd client
 npm start
 ```
 Frontend will run on http://localhost:3000
@@ -228,7 +228,7 @@ Frontend will run on http://localhost:3000
 
 ```
 personal-expense-tracker/
-├── backend/
+├── server/
 │   ├── models/
 │   │   ├── User.js
 │   │   ├── Expense.js
@@ -247,7 +247,7 @@ personal-expense-tracker/
 │   ├── server.js
 │   ├── package.json
 │   └── .env
-├── frontend/
+├── client/
 │   ├── public/
 │   │   └── index.html
 │   ├── src/
@@ -366,7 +366,7 @@ Duplicates are highlighted with a warning, and you can choose to save them or sk
 ### Upload Directory Errors
 The `uploads/` directory is created automatically. If you encounter errors:
 ```bash
-mkdir backend/uploads
+mkdir server/uploads
 ```
 
 ## Contributing

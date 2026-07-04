@@ -45,8 +45,8 @@ jobs:
       - name: Build and Push Backend Image
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
-          file: ./backend/Dockerfile
+          context: ./server
+          file: ./server/Dockerfile
           platforms: ${{ env.BUILD_PLATFORM }}
           push: true
           # Layer caching via ACR (speeds up native addon compilation)
@@ -120,8 +120,8 @@ jobs:
       - name: Build and Push Frontend Image
         uses: docker/build-push-action@v6
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
+          context: ./client
+          file: ./client/Dockerfile
           platforms: ${{ env.BUILD_PLATFORM }}
           push: true
           cache-from: type=registry,ref=${{ secrets.ACR_LOGIN_SERVER }}/personal-ops-frontend:buildcache

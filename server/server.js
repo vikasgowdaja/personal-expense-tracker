@@ -105,14 +105,14 @@ app.use('/api', (req, res) => {
   res.status(404).json({ message: 'API route not found' });
 });
 
-const frontendDistPath = path.resolve(__dirname, '../frontend/dist');
-const hasFrontendBuild = fs.existsSync(frontendDistPath);
+const clientDistPath = path.resolve(__dirname, '../client/dist');
+const hasClientBuild = fs.existsSync(clientDistPath);
 
-if (process.env.NODE_ENV === 'production' && hasFrontendBuild) {
-  app.use(express.static(frontendDistPath));
+if (process.env.NODE_ENV === 'production' && hasClientBuild) {
+  app.use(express.static(clientDistPath));
 
   app.get('*', (req, res) => {
-    res.sendFile(path.join(frontendDistPath, 'index.html'));
+    res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 } else {
   app.get('/', (req, res) => {

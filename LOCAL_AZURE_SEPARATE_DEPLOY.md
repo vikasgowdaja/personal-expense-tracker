@@ -47,7 +47,7 @@ From repository root:
 Option A (local build + push):
 
 ```bash
-docker build -t vikasacr267549.azurecr.io/personal-ops-backend:manual ./backend
+docker build -t vikasacr267549.azurecr.io/personal-ops-backend:manual ./server
 
 docker push vikasacr267549.azurecr.io/personal-ops-backend:manual
 ```
@@ -58,7 +58,7 @@ Option B (remote ACR build, no local Docker build needed):
 az acr build \
   --registry vikasacr267549 \
   --image personal-ops-backend:manual \
-  ./backend
+  ./server
 ```
 
 Then configure App Service container image:
@@ -97,7 +97,7 @@ Option A (local build + push):
 docker build \
   -t vikasacr267549.azurecr.io/personal-ops-frontend:manual \
   --build-arg REACT_APP_API_BASE_URL="https://backend-personal-ops-feg6cagkdjf0hmcz.canadacentral-01.azurewebsites.net/api" \
-  ./frontend
+  ./client
 
 docker push vikasacr267549.azurecr.io/personal-ops-frontend:manual
 ```
@@ -109,7 +109,7 @@ az acr build \
   --registry vikasacr267549 \
   --image personal-ops-frontend:manual \
   --build-arg REACT_APP_API_BASE_URL="https://backend-personal-ops-feg6cagkdjf0hmcz.canadacentral-01.azurewebsites.net/api" \
-  ./frontend
+  ./client
 ```
 
 Then configure App Service container image:

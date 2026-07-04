@@ -5,7 +5,7 @@ This service powers `/extract` for Finance Image Intelligence.
 ## Run locally
 
 ```bash
-cd backend/ai/finance_service
+cd server/ai/finance_service
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8001
 ```

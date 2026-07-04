@@ -24,7 +24,7 @@ Receipt Image
 
 ## New Modules
 
-### 1. **Item Detector** (`backend/ai/items/item_detector.py`)
+### 1. **Item Detector** (`server/ai/items/item_detector.py`)
 
 Detects individual line items in receipt images using:
 - **OpenCV Contour Detection**: Identifies horizontal lines (typical for receipts)
@@ -47,7 +47,7 @@ regions = detector.detect_item_regions("receipt.jpg")
 # Returns: [{"x": 10, "y": 30, "width": 400, "height": 25, "confidence": 0.85}, ...]
 ```
 
-### 2. **Item Field Extractor** (`backend/ai/items/item_extractor.py`)
+### 2. **Item Field Extractor** (`server/ai/items/item_extractor.py`)
 
 Extracts structured fields from OCR text of individual items:
 
@@ -84,7 +84,7 @@ item = extractor.extract_fields("Margherita Pizza x2 @₹250.00 GST:₹45")
 # }
 ```
 
-## Updated Pipeline (`backend/ai/pipeline.py`)
+## Updated Pipeline (`server/ai/pipeline.py`)
 
 **New Multi-Item Mode (`extract_mode="multi_item"`):**
 
@@ -108,13 +108,13 @@ item = extractor.extract_fields("Margherita Pizza x2 @₹250.00 GST:₹45")
 **CLI Usage:**
 ```bash
 # Multi-item mode (default)
-python backend/ai/pipeline.py receipt.jpg
+python server/ai/pipeline.py receipt.jpg
 
 # Single-record legacy mode
-python backend/ai/pipeline.py receipt.jpg --single
+python server/ai/pipeline.py receipt.jpg --single
 
 # With user history for ML context
-python backend/ai/pipeline.py receipt.jpg --history history.json
+python server/ai/pipeline.py receipt.jpg --history history.json
 ```
 
 **Response:**
@@ -343,17 +343,17 @@ self.quantity_pattern = r'(?:qty|quantity|x|×)[\s:]*(\d+\.?\d*)'
 
 ```bash
 # Test item detection
-python -m pytest backend/ai/items/test_item_detector.py
+python -m pytest server/ai/items/test_item_detector.py
 
 # Test field extraction
-python -m pytest backend/ai/items/test_item_extractor.py
+python -m pytest server/ai/items/test_item_extractor.py
 ```
 
 ### Integration Test
 
 ```bash
 # Process test receipt
-python backend/ai/pipeline.py backend/ai/test_receipts/multi_item.jpg
+python server/ai/pipeline.py server/ai/test_receipts/multi_item.jpg
 
 # Verify output has multiple items
 cat output.json | grep total_items
@@ -405,8 +405,8 @@ cat output.json | grep total_items
 
 ## References
 
-- [Item Detection Code](backend/ai/items/item_detector.py)
-- [Field Extraction Code](backend/ai/items/item_extractor.py)
-- [Pipeline Integration](backend/ai/pipeline.py)
-- [API Routes](backend/routes/ocr.js)
-- [Frontend Component](frontend/src/components/Expenses/UploadReceipt.js)
+- [Item Detection Code](server/ai/items/item_detector.py)
+- [Field Extraction Code](server/ai/items/item_extractor.py)
+- [Pipeline Integration](server/ai/pipeline.py)
+- [API Routes](server/routes/ocr.js)
+- [Frontend Component](client/src/components/Expenses/UploadReceipt.js)

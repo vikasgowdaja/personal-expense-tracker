@@ -18,37 +18,37 @@ Your Personal Expense Tracker now intelligently extracts **each line item from r
 
 ## 📦 New Components Created
 
-### 1. **Item Detector** (`backend/ai/items/item_detector.py`)
+### 1. **Item Detector** (`server/ai/items/item_detector.py`)
 - Detects individual line items using OpenCV contour detection
 - Segments receipt into item regions
 - Returns bounding boxes with confidence scores
 - ~100-500ms per receipt
 
-### 2. **Item Field Extractor** (`backend/ai/items/item_extractor.py`)
+### 2. **Item Field Extractor** (`server/ai/items/item_extractor.py`)
 - Parses OCR text for each item
 - Extracts: name, quantity, unit_price, total_price, tax, discount
 - Validates data and assigns quality scores
 - Detects anomalies (missing fields, invalid ranges)
 
-### 3. **Enhanced Pipeline** (`backend/ai/pipeline.py`)
+### 3. **Enhanced Pipeline** (`server/ai/pipeline.py`)
 - New multi-item extraction mode (default)
 - Integrates: detection → OCR → extraction → validation → enrichment
 - Returns array of items with quality scores
 - Backward compatible with single-item mode
 
-### 4. **Updated Backend API** (`backend/routes/ocr.js`)
+### 4. **Updated Backend API** (`server/routes/ocr.js`)
 - POST `/api/ocr/upload` returns array of expenses
 - Handles multiple items per receipt
 - Bulk insert with atomic transactions
 
-### 5. **Enhanced Frontend** (`frontend/src/components/Expenses/UploadReceipt.js`)
+### 5. **Enhanced Frontend** (`client/src/components/Expenses/UploadReceipt.js`)
 - Table view for compact multi-item display
 - Inline editing (item, amount, quantity, category, date)
 - Quality score badges
 - Details panel with AI insights
 - Bulk save operation
 
-### 6. **Updated Styling** (`frontend/src/components/Expenses/UploadReceipt.css`)
+### 6. **Updated Styling** (`client/src/components/Expenses/UploadReceipt.css`)
 - Responsive table layout
 - Quality color coding
 - Mobile-optimized design
@@ -59,7 +59,7 @@ Your Personal Expense Tracker now intelligently extracts **each line item from r
 ## 📁 File Locations
 
 ```
-backend/ai/
+server/ai/
 ├── items/                              [NEW DIRECTORY]
 │   ├── __init__.py                     [NEW]
 │   ├── item_detector.py                [NEW] - Item detection
@@ -71,10 +71,10 @@ backend/ai/
 │   └── IMPLEMENTATION_NOTES.md         [NEW] - Implementation details
 └── pipeline.py                         [UPDATED] - Multi-item support
 
-backend/routes/
+server/routes/
 └── ocr.js                              [UPDATED] - Array handling
 
-frontend/src/components/Expenses/
+client/src/components/Expenses/
 ├── UploadReceipt.js                    [UPDATED] - Table UI + multi-item
 └── UploadReceipt.css                   [UPDATED] - Table styling
 ```
@@ -102,7 +102,7 @@ frontend/src/components/Expenses/
 
 ### 1. Verify Installation
 ```bash
-cd backend
+cd server
 python ai/items/test_multi_item.py
 ```
 
@@ -206,10 +206,10 @@ Array of Items
 
 | File | Content |
 |------|---------|
-| [README.md](backend/ai/items/README.md) | Feature overview & examples |
-| [QUICKSTART.md](backend/ai/items/QUICKSTART.md) | Quick start guide |
-| [MULTI_ITEM_EXTRACTION.md](backend/ai/items/MULTI_ITEM_EXTRACTION.md) | Technical architecture |
-| [IMPLEMENTATION_NOTES.md](backend/ai/items/IMPLEMENTATION_NOTES.md) | Design decisions & internals |
+| [README.md](server/ai/items/README.md) | Feature overview & examples |
+| [QUICKSTART.md](server/ai/items/QUICKSTART.md) | Quick start guide |
+| [MULTI_ITEM_EXTRACTION.md](server/ai/items/MULTI_ITEM_EXTRACTION.md) | Technical architecture |
+| [IMPLEMENTATION_NOTES.md](server/ai/items/IMPLEMENTATION_NOTES.md) | Design decisions & internals |
 
 ---
 
@@ -267,10 +267,10 @@ results = pipeline.process_image(image_path)
 
 ## 🎓 Learn More
 
-1. **Quick Start**: Read [QUICKSTART.md](backend/ai/items/QUICKSTART.md)
-2. **Features**: Read [README.md](backend/ai/items/README.md)
-3. **Technical**: Read [MULTI_ITEM_EXTRACTION.md](backend/ai/items/MULTI_ITEM_EXTRACTION.md)
-4. **Implementation**: Read [IMPLEMENTATION_NOTES.md](backend/ai/items/IMPLEMENTATION_NOTES.md)
+1. **Quick Start**: Read [QUICKSTART.md](server/ai/items/QUICKSTART.md)
+2. **Features**: Read [README.md](server/ai/items/README.md)
+3. **Technical**: Read [MULTI_ITEM_EXTRACTION.md](server/ai/items/MULTI_ITEM_EXTRACTION.md)
+4. **Implementation**: Read [IMPLEMENTATION_NOTES.md](server/ai/items/IMPLEMENTATION_NOTES.md)
 5. **Code**: Check inline comments in detector/extractor
 
 ---

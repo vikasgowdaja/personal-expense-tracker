@@ -69,7 +69,7 @@
 ## File Structure
 
 ```
-backend/ai/
+server/ai/
   ├── items/
   │   ├── __init__.py
   │   ├── item_detector.py        [NEW] - Item region detection
@@ -79,10 +79,10 @@ backend/ai/
   └── ocr/
       └── paddle_ocr.py
 
-backend/routes/
+server/routes/
   └── ocr.js                      [UPDATED] - Bulk expense handling
 
-frontend/src/components/Expenses/
+client/src/components/Expenses/
   ├── UploadReceipt.js            [UPDATED] - Table view + inline editing
   └── UploadReceipt.css           [UPDATED] - Table + detail styles
 ```
@@ -267,7 +267,7 @@ detector.line_overlap_threshold = 0.3
 ## Documentation
 
 Full technical documentation available at:  
-`backend/ai/items/MULTI_ITEM_EXTRACTION.md`
+`server/ai/items/MULTI_ITEM_EXTRACTION.md`
 
 Includes:
 - Architecture diagrams

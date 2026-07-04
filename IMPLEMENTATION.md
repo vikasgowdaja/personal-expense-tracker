@@ -8,44 +8,44 @@ A **complete, production-ready AI system** for offline financial intelligence em
 
 ## 📦 Components Implemented
 
-### 1. **PaddleOCR Engine** (`backend/ai/ocr/paddle_ocr.py`)
+### 1. **PaddleOCR Engine** (`server/ai/ocr/paddle_ocr.py`)
 - Extracts text from financial screenshots with 95%+ accuracy
 - Outputs: text + confidence + bounding boxes
 - Preprocessing: denoise, contrast enhancement, sharpening
 - **Status**: ✅ Ready to use
 
-### 2. **Layout Understanding AI** (`backend/ai/layout_ai/layout_model.py`)
+### 2. **Layout Understanding AI** (`server/ai/layout_ai/layout_model.py`)
 - Groups OCR text into structured transactions
 - Extracts: merchant name, amount, timestamp, type
 - Rule-based + ML hybrid approach
 - **Status**: ✅ Ready to use
 
-### 3. **ML Prediction Engine** (`backend/ai/ml/predict.py`)
+### 3. **ML Prediction Engine** (`server/ai/ml/predict.py`)
 - **Spend Forecasting**: 7-day prediction (moving average)
 - **Anomaly Detection**: Z-score based, alerts on unusual spending
 - **Category Classification**: Auto-categorizes transactions
 - **Spending Insights**: Generates statistical reports
 - **Status**: ✅ Ready to use
 
-### 4. **Self-Healing Engine** (`backend/ai/healing/retrain.py`)
+### 4. **Self-Healing Engine** (`server/ai/healing/retrain.py`)
 - Monitors extraction quality
 - Learns from user corrections
 - Suggests rule improvements
 - Auto-improves over time
 - **Status**: ✅ Ready to use
 
-### 5. **Unified Pipeline** (`backend/ai/pipeline.py`)
+### 5. **Unified Pipeline** (`server/ai/pipeline.py`)
 - Orchestrates all components end-to-end
 - Image → OCR → Layout → ML → Healing → Insights
 - Single entry point for all processing
 - **Status**: ✅ Ready to use
 
-### 6. **Database Schema** (`backend/ai/db/schema.sql`)
+### 6. **Database Schema** (`server/ai/db/schema.sql`)
 - Tables: transactions, ocr_metadata, corrections, predictions, anomalies, healing_logs
 - Indexes for performance
 - **Status**: ✅ Ready to deploy
 
-### 7. **Express Integration** (`backend/routes/ocr.js`)
+### 7. **Express Integration** (`server/routes/ocr.js`)
 - Updated `/api/ocr/upload` to use PFIE pipeline
 - Falls back to legacy OCR if Python unavailable
 - Returns enriched transactions with ML insights
@@ -73,7 +73,7 @@ A **complete, production-ready AI system** for offline financial intelligence em
 ## 📁 File Structure
 
 ```
-backend/ai/
+server/ai/
 ├── __init__.py                  # Python package init
 ├── ocr/
 │   └── paddle_ocr.py           # PaddleOCR engine
@@ -103,7 +103,7 @@ Updated files:
 
 ### Step 1: Install Python AI Dependencies
 ```bash
-cd backend
+cd server
 pip install -r requirements_ai.txt
 ```
 
@@ -118,7 +118,7 @@ sqlite3 data/expense_tracker.db < ai/db/schema.sql
 npm run dev
 
 # Terminal 2: Frontend  
-cd ../frontend
+cd ../client
 npm start
 ```
 
@@ -134,7 +134,7 @@ POST /api/ocr/upload
     ↓
 Node.js routes/ocr.js
     ↓
-Spawns: python backend/ai/pipeline.py <image>
+Spawns: python server/ai/pipeline.py <image>
     ↓
 pipeline.py orchestrates:
     1. paddle_ocr.py → Extract text
@@ -186,7 +186,7 @@ System learns from corrections
 
 ## 🔧 Configuration
 
-Edit `backend/.env`:
+Edit `server/.env`:
 ```bash
 PYTHON=python3                    # Python command
 PFIE_ENABLED=true                 # Enable PFIE
@@ -214,7 +214,7 @@ PFIE_CONFIDENCE_THRESHOLD=0.85    # Flag if below
 
 ### Run interactive demo:
 ```bash
-cd backend/ai
+cd server/ai
 python demo.py
 ```
 
@@ -236,8 +236,8 @@ python ai/healing/retrain.py report
 
 ## 📚 Documentation
 
-- **Full Guide**: `backend/ai/README.md`
-- **Setup Steps**: `backend/ai/SETUP.md`
+- **Full Guide**: `server/ai/README.md`
+- **Setup Steps**: `server/ai/SETUP.md`
 - **This File**: `IMPLEMENTATION.md`
 
 ---
@@ -314,7 +314,7 @@ The system automatically tracks:
 
 View metrics:
 ```bash
-python backend/ai/healing/retrain.py report
+python server/ai/healing/retrain.py report
 ```
 
 ---

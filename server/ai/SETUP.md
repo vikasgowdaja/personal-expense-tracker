@@ -75,7 +75,7 @@ print('Database initialized!')
 
 ## Step 4: Configure Environment
 
-Create `.env` in `backend/` directory:
+Create `.env` in `server/` directory:
 
 ```bash
 # Server
@@ -122,14 +122,14 @@ Healing Engine OK
 
 ### Terminal 1: Backend
 ```bash
-cd backend
+cd server
 npm run dev
 # Expected: "Server running on port 5000"
 ```
 
 ### Terminal 2: Frontend
 ```bash
-cd frontend
+cd client
 npm start
 # Expected: Browser opens to http://localhost:3000
 ```
@@ -192,7 +192,7 @@ export PYTHON=python3
 npm run dev
 ```
 
-**Solution 2**: Modify pipeline call in `backend/routes/ocr.js`
+**Solution 2**: Modify pipeline call in `server/routes/ocr.js`
 ```javascript
 const pythonCmd = 'C:\\Users\\YourName\\AppData\\Local\\Programs\\Python\\Python310\\python.exe';
 // or
@@ -219,7 +219,7 @@ The system is working! Low-confidence transactions are flagged for review. User 
 
 ```
 d:\MERN\personal-expense-tracker\
-├── backend/
+├── server/
 │   ├── ai/
 │   │   ├── ocr/
 │   │   │   └── paddle_ocr.py         ✅ Ready
@@ -242,7 +242,7 @@ d:\MERN\personal-expense-tracker\
 │   ├── .env                           ✅ Config
 │   ├── venv/                          ✅ Virtual env
 │   └── server.js
-├── frontend/
+├── client/
 │   ├── src/
 │   │   └── components/
 │   │       └── Expenses/
@@ -292,7 +292,7 @@ COPY requirements_ai.txt .
 RUN pip install --no-cache-dir -r requirements_ai.txt
 
 # Copy backend
-COPY backend/ .
+COPY server/ .
 
 # Set env
 ENV PYTHON=python3

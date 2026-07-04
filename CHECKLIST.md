@@ -7,37 +7,37 @@
 - [x] Defined data flow & interactions
 
 ## Phase 2: Core Components ✅
-- [x] **OCR Engine** (backend/ai/ocr/paddle_ocr.py)
+- [x] **OCR Engine** (server/ai/ocr/paddle_ocr.py)
   - PaddleOCR integration
   - Image preprocessing
   - Confidence scoring
   
-- [x] **Layout AI** (backend/ai/layout_ai/layout_model.py)
+- [x] **Layout AI** (server/ai/layout_ai/layout_model.py)
   - Transaction grouping
   - Field extraction (name, amount, time)
   - Merchant type detection
   
-- [x] **ML Pipeline** (backend/ai/ml/predict.py)
+- [x] **ML Pipeline** (server/ai/ml/predict.py)
   - Spend forecasting (7-day)
   - Anomaly detection (Z-score)
   - Category classification
   - Spending insights
   
-- [x] **Healing Engine** (backend/ai/healing/retrain.py)
+- [x] **Healing Engine** (server/ai/healing/retrain.py)
   - Low-confidence flagging
   - Correction tracking
   - Pattern learning
   - Rule suggestions
   - Health scoring
   
-- [x] **Unified Pipeline** (backend/ai/pipeline.py)
+- [x] **Unified Pipeline** (server/ai/pipeline.py)
   - End-to-end orchestration
   - Component coordination
   - Error handling
   - Output enrichment
 
 ## Phase 3: Data & Storage ✅
-- [x] **Database Schema** (backend/ai/db/schema.sql)
+- [x] **Database Schema** (server/ai/db/schema.sql)
   - transactions table
   - ocr_metadata table
   - correction_history table
@@ -48,19 +48,19 @@
   - Performance indexes
 
 ## Phase 4: Integration ✅
-- [x] **Express Route Integration** (backend/routes/ocr.js)
+- [x] **Express Route Integration** (server/routes/ocr.js)
   - Updated /api/ocr/upload endpoint
   - PFIE pipeline invocation
   - Fallback to legacy OCR
   - Response enrichment with AI insights
   
-- [x] **Frontend Compatibility** (frontend/src/components/Expenses/UploadReceipt.js)
+- [x] **Frontend Compatibility** (client/src/components/Expenses/UploadReceipt.js)
   - Fixed multipart boundary issue
   - Ready to receive enriched responses
   - Displays AI insights
 
 ## Phase 5: Dependencies & Configuration ✅
-- [x] **Python Dependencies** (backend/requirements_ai.txt)
+- [x] **Python Dependencies** (server/requirements_ai.txt)
   - paddleocr
   - pytesseract
   - opencv-python
@@ -77,7 +77,7 @@
   - Fallback mechanisms
 
 ## Phase 6: Documentation ✅
-- [x] **Comprehensive README** (backend/ai/README.md)
+- [x] **Comprehensive README** (server/ai/README.md)
   - System overview
   - Architecture explanation
   - Component details
@@ -86,7 +86,7 @@
   - Troubleshooting
   - Performance metrics
   
-- [x] **Setup Guide** (backend/ai/SETUP.md)
+- [x] **Setup Guide** (server/ai/SETUP.md)
   - Step-by-step installation
   - Dependency installation
   - Database initialization
@@ -101,7 +101,7 @@
   - Performance metrics
   - Use cases
   
-- [x] **Interactive Demo** (backend/ai/demo.py)
+- [x] **Interactive Demo** (server/ai/demo.py)
   - Demonstrates all components
   - Mock data testing
   - No image file required
@@ -118,21 +118,21 @@
 
 ### Installation Command
 ```bash
-pip install -r backend/requirements_ai.txt
+pip install -r server/requirements_ai.txt
 ```
 
 ### Database Setup
 ```bash
-sqlite3 data/expense_tracker.db < backend/ai/db/schema.sql
+sqlite3 data/expense_tracker.db < server/ai/db/schema.sql
 ```
 
 ### Start Application
 ```bash
 # Terminal 1
-cd backend && npm run dev
+cd server && npm run dev
 
 # Terminal 2
-cd frontend && npm start
+cd client && npm start
 ```
 
 ### Test PFIE
@@ -144,7 +144,7 @@ cd frontend && npm start
 
 ### Run Demo (No Image Required)
 ```bash
-python backend/ai/demo.py
+python server/ai/demo.py
 ```
 
 ---
@@ -179,12 +179,12 @@ python backend/ai/demo.py
 
 ## 📚 Documentation Files
 
-1. **backend/ai/README.md** - Complete system guide
-2. **backend/ai/SETUP.md** - Installation instructions
+1. **server/ai/README.md** - Complete system guide
+2. **server/ai/SETUP.md** - Installation instructions
 3. **IMPLEMENTATION.md** - What was built
-4. **backend/ai/demo.py** - Interactive demonstration
-5. **backend/requirements_ai.txt** - Python dependencies
-6. **backend/ai/db/schema.sql** - Database structure
+4. **server/ai/demo.py** - Interactive demonstration
+5. **server/requirements_ai.txt** - Python dependencies
+6. **server/ai/db/schema.sql** - Database structure
 
 ---
 
@@ -237,4 +237,4 @@ The PFIE system is:
 
 **Status: COMPLETE & READY TO USE! 🚀**
 
-Next step: `pip install -r backend/requirements_ai.txt` and start the app!
+Next step: `pip install -r server/requirements_ai.txt` and start the app!

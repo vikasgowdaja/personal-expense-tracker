@@ -8,7 +8,7 @@
  *   node scripts/createAdmin.js "Vikas Gowda" admin@example.com MyStr0ng!Pass superadmin
  *   node scripts/createAdmin.js "Owner" owner@example.com MyStr0ng!Pass platform_owner
  *
- * Run from the backend/ directory. Requires a valid .env file.
+ * Run from the server/ directory. Requires a valid .env file.
  */
 
 require('dotenv').config();

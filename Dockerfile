@@ -7,13 +7,13 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-# Install backend and frontend dependencies
-COPY backend/package*.json ./backend/
-RUN npm ci --prefix backend
-COPY frontend/package*.json ./frontend/
-RUN npm ci --prefix frontend
+# Install server and client dependencies
+COPY server/package*.json ./server/
+RUN npm ci --prefix server
+COPY client/package*.json ./client/
+RUN npm ci --prefix client
 
-# Copy source and build frontend assets
+# Copy source and build client assets
 COPY . .
 RUN npm run build
 
