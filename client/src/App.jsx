@@ -239,7 +239,7 @@ function App() {
 
             <Route
               path="settings"
-              element={<PlaceholderModule title="Settings" description="Prepare role-based configuration and automation defaults." />}
+              element={<Profile />}
             />
             <Route
               path="animation-lab"
