@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const { body, validationResult } = require("express-validator");
 const User = require("../models/User");
 const auth = require("../middleware/auth");
-const { sendOTPEmail } = require("../utils/mailer");
+const { sendOTPEmail, sendPasswordResetEmail } = require("../utils/mailer");
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -206,6 +206,68 @@ router.post("/login", [
   }
 });
 
+// ─── FORGOT PASSWORD ─────────────────────────────────────────────────────────
+
+router.post("/forgot-password", [
+  body("email", "Valid email required").isEmail()
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+  const { email } = req.body;
+  try {
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (user) {
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(resetToken).digest("hex");
+      user.passwordResetTokenHash = tokenHash;
+      user.passwordResetExpires = new Date(Date.now() + 30 * 60 * 1000);
+      await user.save();
+
+      const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || `${req.protocol}://${req.get("host")}`;
+      await sendPasswordResetEmail(email, `${frontendUrl.replace(/\/$/, '')}/reset-password?token=${resetToken}`);
+    }
+
+    res.json({ message: "If that account exists, a password reset link has been sent." });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server error");
+  }
+});
+
+// ─── RESET PASSWORD ──────────────────────────────────────────────────────────
+
+router.post("/reset-password", [
+  body("token", "Reset token is required").not().isEmpty(),
+  body("password", "Password must be at least 8 characters").isLength({ min: 8 })
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+  const { token, password } = req.body;
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  try {
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const user = await User.findOneAndUpdate(
+      {
+        passwordResetTokenHash: tokenHash,
+        passwordResetExpires: { $gt: new Date() }
+      },
+      {
+        $set: { password: hashedPassword, refreshToken: null },
+        $unset: { passwordResetTokenHash: 1, passwordResetExpires: 1 }
+      },
+      { new: true }
+    );
+    if (!user) return res.status(400).json({ message: "Invalid or expired reset token" });
+
+    res.json({ message: "Password reset successful" });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server error");
+  }
+});
+
 // ─── REQUEST OTP LOGIN ────────────────────────────────────────────────────────
 
 router.post("/request-otp", [
@@ -338,7 +400,8 @@ router.put(
       .isLength({ min: 7, max: 20 })
       .withMessage("Mobile number length should be between 7 and 20"),
     body("profilePhoto").optional().isString(),
-    body("name").optional().not().isEmpty().withMessage("Name cannot be empty")
+    body("name").optional().not().isEmpty().withMessage("Name cannot be empty"),
+    body("password").optional().isLength({ min: 8 }).withMessage("Password must be at least 8 characters")
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -364,6 +427,10 @@ router.put(
       if (req.body.name !== undefined) user.name = req.body.name.trim();
       if (req.body.mobile !== undefined) user.mobile = String(req.body.mobile || '').trim();
       if (req.body.profilePhoto !== undefined) user.profilePhoto = String(req.body.profilePhoto || '').trim();
+      if (req.body.password !== undefined) {
+        user.password = await bcrypt.hash(req.body.password, 12);
+        user.refreshToken = null;
+      }
       if (req.body.annualEngagementTarget !== undefined) {
         const t = parseInt(req.body.annualEngagementTarget, 10);
         if (!isNaN(t) && t >= 1) user.annualEngagementTarget = t;
