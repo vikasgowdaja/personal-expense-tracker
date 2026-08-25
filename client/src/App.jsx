@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import './App.css';
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
+import ForgotPassword from './components/Auth/ForgotPassword';
+import ResetPassword from './components/Auth/ResetPassword';
 import Dashboard from './components/Dashboard/Dashboard';
 import EmployeeDashboard from './components/Dashboard/EmployeeDashboard';
 import ExpenseList from './components/Expenses/ExpenseList';
@@ -156,6 +158,14 @@ function App() {
           <Route
             path="/register"
             element={!isAuthenticated ? <Register onLogin={handleLogin} /> : <Navigate to="/dashboard" />}
+          />
+          <Route
+            path="/forgot-password"
+            element={!isAuthenticated ? <ForgotPassword /> : <Navigate to="/dashboard" />}
+          />
+          <Route
+            path="/reset-password"
+            element={!isAuthenticated ? <ResetPassword /> : <Navigate to="/dashboard" />}
           />
           <Route
             path="/"

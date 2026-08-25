@@ -10,6 +10,7 @@ function Login({ onLogin }) {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   const onChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -99,7 +100,7 @@ function Login({ onLogin }) {
             <div className="form-group">
               <label htmlFor="password">Password</label>
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 className="form-control"
                 id="password"
                 name="password"
@@ -107,10 +108,13 @@ function Login({ onLogin }) {
                 onChange={onChange}
                 required
               />
+              <button type="button" className="password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
             </div>
             {error && <div className="error">{error}</div>}
             <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-              {loading ? 'Logging in…' : 'Login'}
+              {loading ? 'Logging in...' : 'Login'}
             </button>
           </form>
         )}
@@ -132,7 +136,7 @@ function Login({ onLogin }) {
             {error && <div className="error">{error}</div>}
             {info && <div className="info">{info}</div>}
             <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-              {loading ? 'Sending OTP…' : 'Send OTP'}
+              {loading ? 'Sending OTP...' : 'Send OTP'}
             </button>
           </form>
         )}
@@ -156,7 +160,7 @@ function Login({ onLogin }) {
             </div>
             {error && <div className="error">{error}</div>}
             <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-              {loading ? 'Verifying…' : 'Login with OTP'}
+              {loading ? 'Verifying...' : 'Login with OTP'}
             </button>
             <button
               type="button"
@@ -169,6 +173,9 @@ function Login({ onLogin }) {
           </form>
         )}
 
+        <p className="auth-link">
+          <Link to="/forgot-password">Forgot password?</Link>
+        </p>
         <p className="auth-link">
           Don't have an account? <Link to="/register">Register</Link>
         </p>

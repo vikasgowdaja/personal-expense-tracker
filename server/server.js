@@ -66,12 +66,14 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://vikas_gowda:4OUDW3Y2E
 app.use('/api/auth/request-otp', otpLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
 app.use('/api/auth', require('./routes/auth'));
 
 // Auth aliases for single-domain deployments that use /auth/* directly
 app.use('/auth/request-otp', otpLimiter);
 app.use('/auth/login', authLimiter);
 app.use('/auth/register', authLimiter);
+app.use('/auth/forgot-password', authLimiter);
 app.use('/auth', require('./routes/auth'));
 
 // Business routes

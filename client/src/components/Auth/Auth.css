@@ -177,3 +177,12 @@ select.form-control {
 .auth-link a {
   color: #423fdb;
 }
+.password-toggle {
+  margin-left: 8px;
+  border: 0;
+  background: transparent;
+  color: #667eea;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
