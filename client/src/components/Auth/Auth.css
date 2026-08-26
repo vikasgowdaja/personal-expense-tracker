@@ -178,11 +178,22 @@ select.form-control {
   color: #423fdb;
 }
 .password-toggle {
-  margin-left: 8px;
+  flex: 0 0 auto;
+  margin-left: 6px;
+  padding: 8px 4px;
   border: 0;
   background: transparent;
   color: #667eea;
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
+}
+.password-input-wrap {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.password-input-wrap .form-control {
+  min-width: 0;
+  flex: 1 1 auto;
 }

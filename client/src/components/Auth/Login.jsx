@@ -99,18 +99,20 @@ function Login({ onLogin }) {
             </div>
             <div className="form-group">
               <label htmlFor="password">Password</label>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                className="form-control"
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={onChange}
-                required
-              />
-              <button type="button" className="password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
-                {showPassword ? 'Hide' : 'Show'}
-              </button>
+              <div className="password-input-wrap">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-control"
+                  id="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={onChange}
+                  required
+                />
+                <button type="button" className="password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
             </div>
             {error && <div className="error">{error}</div>}
             <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
