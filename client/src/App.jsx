@@ -15,6 +15,7 @@ import ProfitAnimationLab from './components/Common/ProfitAnimationLab';
 import MasterDataHub from './components/Common/MasterDataHub';
 import CalendarHub from './components/Calendar/CalendarHub';
 import Profile from './components/Profile/Profile';
+import Settings from './components/Settings/Settings';
 import TrainingEngagementsHub from './components/TrainingEngagements/TrainingEngagementsHub';
 import TrainersSettlement from './components/TrainersSettlement/TrainersSettlement';
 import EmployeeManager from './components/Admin/EmployeeManager';
@@ -239,7 +240,7 @@ function App() {
 
             <Route
               path="settings"
-              element={<Profile />}
+              element={<Settings />}
             />
             <Route
               path="animation-lab"

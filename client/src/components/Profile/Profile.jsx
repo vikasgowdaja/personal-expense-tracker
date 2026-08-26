@@ -12,10 +12,6 @@ function Profile() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  const [passwordForm, setPasswordForm] = useState({ password: '', confirmPassword: '' });
-  const [passwordSaving, setPasswordSaving] = useState(false);
-  const [passwordMessage, setPasswordMessage] = useState('');
-  const [passwordError, setPasswordError] = useState('');
   const [shareInfo, setShareInfo] = useState('');
   const [loading, setLoading] = useState(true);
   const [shareFields, setShareFields] = useState({
@@ -106,31 +102,6 @@ function Profile() {
       setErrorMsg(error.response?.data?.message || 'Failed to update profile.');
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleSetPassword = async (e) => {
-    e.preventDefault();
-    setPasswordMessage('');
-    setPasswordError('');
-    if (passwordForm.password.length < 8) {
-      setPasswordError('Password must be at least 8 characters.');
-      return;
-    }
-    if (passwordForm.password !== passwordForm.confirmPassword) {
-      setPasswordError('Passwords do not match.');
-      return;
-    }
-
-    setPasswordSaving(true);
-    try {
-      await authAPI.updateUser({ password: passwordForm.password });
-      setPasswordForm({ password: '', confirmPassword: '' });
-      setPasswordMessage('Password set successfully.');
-    } catch (error) {
-      setPasswordError(error.response?.data?.message || 'Failed to set password.');
-    } finally {
-      setPasswordSaving(false);
     }
   };
 
@@ -269,41 +240,6 @@ function Profile() {
               {saving ? 'Saving...' : 'Save Profile'}
             </button>
           </div>
-        </form>
-
-        <form onSubmit={handleSetPassword} className="profile-form profile-password-form">
-          <h3>Set Password</h3>
-          <p className="muted">Set a password for password-based login.</p>
-          <div className="ops-grid-two">
-            <div className="form-group">
-              <label htmlFor="profile-password">New password</label>
-              <input
-                type="password"
-                className="form-control"
-                id="profile-password"
-                value={passwordForm.password}
-                onChange={(e) => setPasswordForm((prev) => ({ ...prev, password: e.target.value }))}
-                minLength="8"
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="profile-confirm-password">Confirm password</label>
-              <input
-                type="password"
-                className="form-control"
-                id="profile-confirm-password"
-                value={passwordForm.confirmPassword}
-                onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-                required
-              />
-            </div>
-          </div>
-          {passwordMessage && <p className="success">{passwordMessage}</p>}
-          {passwordError && <p className="error">{passwordError}</p>}
-          <button className="btn btn-primary" type="submit" disabled={passwordSaving}>
-            {passwordSaving ? 'Setting password...' : 'Set Password'}
-          </button>
         </form>
 
         <div className="profile-share-box">
