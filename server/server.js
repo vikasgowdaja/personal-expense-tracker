@@ -32,6 +32,14 @@ const otpLimiter = rateLimit({
   message: { message: 'Too many OTP requests, please wait before trying again.' }
 });
 
+const dangerZoneLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many data-clear requests, please try again later.' }
+});
+
 // ─── Global Middleware ────────────────────────────────────────────────────────
 
 const allowedOrigins = (process.env.CORS_ORIGINS || '')
@@ -77,6 +85,8 @@ app.use('/auth/forgot-password', authLimiter);
 app.use('/auth', require('./routes/auth'));
 
 // Business routes
+app.use('/api/settings/danger-zone', dangerZoneLimiter);
+app.use('/api/settings', require('./routes/settings'));
 app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/ocr', require('./routes/ocr'));

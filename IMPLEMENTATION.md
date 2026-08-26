@@ -1,5 +1,11 @@
 # 🚀 PFIE Implementation Summary
 
+## Settings API
+
+Settings are exposed under `/api/settings` and require the existing JWT auth middleware. Scalar preferences use allowlisted namespaces such as `preferences`, `locale`, `notifications`, and `reports/preferences`; values are user-scoped, merged by default, and reject password/token/secret/credential-like keys. Resource namespaces (`expenses/categories`, `income/sources`, `budget/budgets`, `integrations/accounts`, and `workspace/members`) use user-scoped `SettingItem` records with archive/restore and dependency-safe deletion.
+
+`GET /api/settings/security/sessions` returns only the current session summary. Session revocation is intentionally unsupported and returns `501`; the API does not expose JWT or refresh-token values. `POST /api/settings/danger-zone/clear-user-data` requires the exact confirmation `DELETE MY DATA` and clears only user-owned settings records. Financial transactions are not deleted because there is no explicit data-model contract for this operation. Legacy `/api/categories` remains unchanged and global; new settings categories are user-scoped.
+
 ## What Was Built
 
 A **complete, production-ready AI system** for offline financial intelligence embedded in your MERN expense tracker.

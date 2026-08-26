@@ -131,6 +131,22 @@ export const authAPI = {
   updateUser: (data) => api.put('/auth/user', data)
 };
 
+export const settingsAPI = {
+  get: (namespace) => api.get(`/settings/${namespace}`),
+  update: (namespace, values, options = {}) => api.put(`/settings/${namespace}`, {
+    values,
+    ...options
+  }),
+  getResources: (namespace, params = {}) => api.get(`/settings/resources/${namespace}`, { params }),
+  createResource: (namespace, data) => api.post(`/settings/resources/${namespace}`, data),
+  updateResource: (namespace, id, data) => api.put(`/settings/resources/${namespace}/${id}`, data),
+  archiveResource: (namespace, id) => api.post(`/settings/resources/${namespace}/${id}/archive`),
+  restoreResource: (namespace, id) => api.post(`/settings/resources/${namespace}/${id}/restore`),
+  deleteResource: (namespace, id) => api.delete(`/settings/resources/${namespace}/${id}`),
+  getSessions: () => api.get('/settings/security/sessions'),
+  clearUserData: () => api.post('/settings/danger-zone/clear-user-data', { confirmation: 'DELETE MY DATA' })
+};
+
 // Expense API
 export const expenseAPI = {
   getAll: () => api.get('/expenses'),

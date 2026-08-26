@@ -16,6 +16,8 @@ import MasterDataHub from './components/Common/MasterDataHub';
 import CalendarHub from './components/Calendar/CalendarHub';
 import Profile from './components/Profile/Profile';
 import Settings from './components/Settings/Settings';
+import SettingsShell from './components/Settings/SettingsShell';
+import { SettingsDependencyPage, SettingsOverview } from './components/Settings/SettingsPages';
 import TrainingEngagementsHub from './components/TrainingEngagements/TrainingEngagementsHub';
 import TrainersSettlement from './components/TrainersSettlement/TrainersSettlement';
 import EmployeeManager from './components/Admin/EmployeeManager';
@@ -28,6 +30,42 @@ import { authAPI } from './services/api';
 import { DB_BACKED_KEYS, initDbBackedStorage } from './services/dbBackedStorage';
 
 const EMPLOYEE_DB_BACKED_KEYS = ['teaching_sessions', 'daily_logs'];
+
+const SETTINGS_DEPENDENCY_ROUTES = [
+  ['preferences', 'Preferences', 'Choose how the workspace behaves for you.'],
+  ['locale', 'Language & Region', 'Set language, date, time, and currency defaults.'],
+  ['expenses/subcategories', 'Subcategories', 'Organize categories into a deeper expense hierarchy.'],
+  ['expenses/payment-methods', 'Payment Methods', 'Manage the ways expenses are paid.'],
+  ['expenses/tags', 'Tags', 'Create reusable labels for transaction analysis.'],
+  ['expenses/recurring', 'Recurring Expenses', 'Manage scheduled expense entries.'],
+  ['expenses/rules', 'Expense Rules', 'Automate categorization and transaction handling.'],
+  ['expenses/defaults', 'Expense Defaults', 'Choose default values for new expenses.'],
+  ['expenses/categories', 'Categories', 'Manage expense categories and their transaction relationships.'],
+  ['income/sources', 'Income Sources', 'Manage the sources from which income is received.'],
+  ['income/categories', 'Income Categories', 'Organize income into meaningful categories.'],
+  ['income/recurring', 'Recurring Income', 'Manage scheduled income entries.'],
+  ['budget/budgets', 'Budgets', 'Plan monthly and category-based spending.'],
+  ['budget/limits', 'Spending Limits', 'Set thresholds for spending control.'],
+  ['budget/savings-goals', 'Savings Goals', 'Track targets for planned savings.'],
+  ['notifications', 'Notifications', 'Control alerts, summaries, and reminders.'],
+  ['notifications/email', 'Email Notifications', 'Choose which updates arrive by email.'],
+  ['notifications/push', 'Push Notifications', 'Choose which updates arrive as push notifications.'],
+  ['notifications/reminders', 'Reminders', 'Configure expense and recurring reminders.'],
+  ['notifications/alerts', 'Alerts', 'Configure budget and activity alerts.'],
+  ['reports/preferences', 'Report Preferences', 'Set default report presentation and date ranges.'],
+  ['reports/export', 'Export Data', 'Choose the format and scope of exported records.'],
+  ['reports/import', 'Import Data', 'Validate and map records before importing them.'],
+  ['security/2fa', 'Two-factor Authentication', 'Add another verification step to account access.'],
+  ['security/sessions', 'Sessions', 'Review and revoke active account sessions.'],
+  ['security/activity', 'Security Activity', 'Review recent account access and security events.'],
+  ['integrations/accounts', 'Financial Accounts', 'Connect and manage external financial accounts.'],
+  ['integrations/api', 'API Access', 'Create and revoke programmatic access credentials.'],
+  ['workspace', 'Workspace', 'Manage workspace-level information and defaults.'],
+  ['workspace/members', 'Workspace Members', 'Invite and manage workspace members.'],
+  ['workspace/roles', 'Workspace Roles', 'Review roles and permissions.'],
+  ['workspace/activity', 'Workspace Activity', 'Review workspace-level activity.'],
+  ['danger-zone', 'Danger Zone', 'Review irreversible account and data actions.']
+];
 
 function clearDbBackedLocalCache() {
   DB_BACKED_KEYS.forEach((key) => localStorage.removeItem(key));
@@ -238,10 +276,18 @@ function App() {
               }
             />
 
-            <Route
-              path="settings"
-              element={<Settings />}
-            />
+            <Route path="settings" element={<SettingsShell />}>
+              <Route index element={<SettingsOverview />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="security/password" element={<Settings />} />
+              {SETTINGS_DEPENDENCY_ROUTES.map(([path, title, description]) => (
+                <Route
+                  key={path}
+                  path={path}
+                  element={<SettingsDependencyPage title={title} description={description} />}
+                />
+              ))}
+            </Route>
             <Route
               path="animation-lab"
               element={<ProfitAnimationLab />}
